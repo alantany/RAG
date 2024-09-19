@@ -215,7 +215,7 @@ def main():
     </style>
     """, unsafe_allow_html=True)
 
-    st.title("知识问答系统")
+    st.title("AI知识问答系统")
 
     # 初始化 session state
     if "rag_messages" not in st.session_state:
