@@ -1,0 +1,12 @@
+streamlit
+openai
+sentence-transformers
+PyPDF2
+python-docx
+faiss-cpu
+tiktoken
+numpy
+jieba
+pandas
+serpapi
+requests

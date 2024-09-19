@@ -1,3 +1,42 @@
+"""
+AI知识问答系统安装文档
+
+1. 环境要求：
+   - Python 3.7+
+   - pip (Python包管理器)
+
+2. 创建虚拟环境（可选但推荐）：
+   python -m venv venv
+   source venv/bin/activate  # 在Windows上使用: venv\Scripts\activate
+
+3. 安装依赖：
+   pip install -r requirements.txt
+
+4. requirements.txt 文件内容：
+   streamlit
+   openai
+   sentence-transformers
+   PyPDF2
+   python-docx
+   faiss-cpu
+   tiktoken
+   serpapi
+   pandas
+   sqlite3  # 通常已包含在Python标准库中
+
+5. 其他依赖：
+   - 确保你有有效的OpenAI API密钥
+   - 如果使用Google搜索功能，需要有效的SerpAPI密钥
+
+6. 运行应用：
+   streamlit run app.py
+
+注意：
+- 请确保所有依赖都已正确安装
+- 在代码中替换OpenAI API密钥和SerpAPI密钥为你自己的密钥
+- 对于大型文件处理，可能需要增加系统内存或使用更强大的硬件
+"""
+
 import streamlit as st
 
 # 设置页面配置必须是第一个 Streamlit 命令
