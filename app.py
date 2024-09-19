@@ -216,10 +216,14 @@ def main():
     """, unsafe_allow_html=True)
 
 <<<<<<< HEAD
+<<<<<<< HEAD
     st.title("AI知识问答系统")
 =======
     st.title("知识问答系统")
 >>>>>>> 76cd04afc21c1c9eff3cabb16df669c46c0bbf1c
+=======
+    st.title("AI知识问答系统")
+>>>>>>> 57d714fb5184df55d72950c2325bdcacf765f9e3
 
     # 初始化 session state
     if "rag_messages" not in st.session_state:
