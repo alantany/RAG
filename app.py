@@ -176,7 +176,7 @@ def rag_qa(query, file_indices, relevant_docs=None):
         model="gpt-3.5-turbo",
         messages=[
             {"role": "system", "content": "你是一位有帮助的助手。请根据给定的上下文回答问题。始终使用中文回答，无论问题是什么语言。在回答之后，请务必提供一段最相关的原文摘录，以'相关原文：'为前缀。"},
-            {"role": "user", "content": f"上下文: {context_text}\n\n问题: {query}\n\n请提供你的回答，然后在回答后面附上相关的原文摘录，以'相关原文：'为前缀。"}
+            {"role": "user", "content": f"上下文: {context_text}\n\n问题: {query}\n\n请提供你的回答然后在回答后面附上相关的原文摘录，以'相关原文：'为前缀。"}
         ]
     )
     answer = response.choices[0].message.content
@@ -436,6 +436,8 @@ def main():
             st.session_state.web_messages = []
         if "web_prompt" not in st.session_state:
             st.session_state.web_prompt = ""
+        if "execute_web_query" not in st.session_state:
+            st.session_state.execute_web_query = False
 
         # 创建一个容器来放置对话历史
         web_chat_container = st.container()
@@ -445,30 +447,26 @@ def main():
                 with st.chat_message(message["role"]):
                     st.markdown(message["content"])
 
-        # 将输入框放在对话历史下方
-        web_prompt = st.text_input("请输入您的问题（如需搜索，请以'搜索'开头）:", key="web_chat_input_2", value=st.session_state.web_prompt)
+        # 用户输入
+        web_prompt = st.chat_input("请输入您的问题（如需搜索，请以'搜索'开头）:", key="web_chat_input")
 
-        if web_prompt and web_prompt != st.session_state.web_prompt:
-            current_prompt = web_prompt  # 保存当前输入
-            st.session_state.web_prompt = ""  # 立即清空输入框
-            st.session_state.web_messages.append({"role": "user", "content": current_prompt})
-
+        if web_prompt:
+            st.session_state.web_messages.append({"role": "user", "content": web_prompt})
+            
             with web_chat_container:
                 with st.chat_message("user"):
-                    st.markdown(current_prompt)
+                    st.markdown(web_prompt)
                 with st.chat_message("assistant"):
                     with st.spinner("正在搜索并生成回答..."):
                         try:
-                            if current_prompt.lower().startswith("搜索"):
-                                response = serpapi_search_qa(current_prompt[2:].strip())  # 去掉"搜索"前缀
+                            if web_prompt.lower().startswith("搜索"):
+                                response = serpapi_search_qa(web_prompt[2:].strip())  # 去掉"搜索"前缀
                             else:
-                                response = direct_qa(current_prompt)
+                                response = direct_qa(web_prompt)
                             st.markdown(response)
                             st.session_state.web_messages.append({"role": "assistant", "content": response})
                         except Exception as e:
                             st.error(f"生成回答时发生错误: {str(e)}")
-            
-            st.rerun()  # 强制重新运行应用以更新UI
 
     with tab3:
         st.header("自然语言数据库查询")
@@ -483,56 +481,72 @@ def main():
             else:
                 st.error("无法创建数据库文件。请检查网络连接和文件权限。")
 
-        # 调整列的宽度比例
-        col1, col2 = st.columns([1, 1.5])
+        # 初始化 session state
+        if "db_messages" not in st.session_state:
+            st.session_state.db_messages = []
 
-        with col1:
-            nl_query = st.text_input("请输入您的自然语言查询:", key="db_nl_query")
+        # 创建一个容器来放置对话历史
+        db_chat_container = st.container()
 
-            if nl_query:
-                with st.spinner("正在生成SQL并执行查询..."):
-                    try:
-                        sql_query = nl_to_sql(nl_query)
-                        st.code(sql_query, language="sql")
-                        
-                        results, column_names = execute_sql(sql_query)
-                        if isinstance(results, str):
-                            st.error(results)
-                        else:
-                            with col2:
-                                st.subheader("查询结果")
+        with db_chat_container:
+            for message in st.session_state.db_messages:
+                with st.chat_message(message["role"]):
+                    st.markdown(message["content"])
+
+        # 用户输入
+        nl_query = st.chat_input("请输入您的自然语言查询:", key="db_chat_input")
+
+        if nl_query:
+            st.session_state.db_messages.append({"role": "user", "content": nl_query})
+            
+            with db_chat_container:
+                with st.chat_message("user"):
+                    st.markdown(nl_query)
+                with st.chat_message("assistant"):
+                    with st.spinner("正在生成SQL并执行查询..."):
+                        try:
+                            sql_query = nl_to_sql(nl_query)
+                            st.code(sql_query, language="sql")
+                            
+                            results, column_names = execute_sql(sql_query)
+                            if isinstance(results, str):
+                                st.error(results)
+                            else:
                                 df = pd.DataFrame(results, columns=column_names)
                                 st.dataframe(df)
 
                                 # 生成自然语言解释
                                 explanation = generate_explanation(nl_query, sql_query, df)
-                                st.subheader("结果解释")
                                 st.markdown(explanation, unsafe_allow_html=True)
-                    except Exception as e:
-                        st.error(f"查询执行错误: {str(e)}")
+                            
+                            response = f"SQL查询:\n```sql\n{sql_query}\n```\n\n解释:\n{explanation}"
+                            st.session_state.db_messages.append({"role": "assistant", "content": response})
+                        except Exception as e:
+                            st.error(f"查询执行错误: {str(e)}")
 
-            if 'show_db_info' not in st.session_state:
-                st.session_state.show_db_info = False
-            if 'selected_table' not in st.session_state:
-                st.session_state.selected_table = None
+        # 数据库信息显示部分保持不变
+        if 'show_db_info' not in st.session_state:
+            st.session_state.show_db_info = False
+        if 'selected_table' not in st.session_state:
+            st.session_state.selected_table = None
 
-            if st.button("显示/隐藏数据库信息"):
-                st.session_state.show_db_info = not st.session_state.show_db_info
-                st.session_state.selected_table = None  # 重置选中的表
+        if st.button("显示/隐藏数据库信息"):
+            st.session_state.show_db_info = not st.session_state.show_db_info
+            st.session_state.selected_table = None  # 重置选中的表
 
-            if st.session_state.show_db_info:
-                table_info = get_table_info()
-                if not table_info:
-                    st.error("无法获取数据库信息。请检查数据库连接。")
-                else:
-                    st.success(f"成功获取到 {len(table_info)} 个表的信息")
-                    
-                    # 创建一个动态的列布局来横向排列表名
-                    cols = st.columns(4)  # 每行4个表名
-                    for i, table in enumerate(table_info.keys()):
-                        with cols[i % 4]:
-                            if st.button(table, key=f"table_{table}"):
-                                st.session_state.selected_table = table
+        if st.session_state.show_db_info:
+            table_info = get_table_info()
+            if not table_info:
+                st.error("无法获取数据库信息。请检查数据库连接。")
+            else:
+                st.success(f"成功获取到 {len(table_info)} 个表的信息")
+                
+                # 创建一个动态的列布局来横向排列表名
+                cols = st.columns(4)  # 每行4个表名
+                for i, table in enumerate(table_info.keys()):
+                    with cols[i % 4]:
+                        if st.button(table, key=f"table_{table}"):
+                            st.session_state.selected_table = table
 
         # 在表名下方显示查询结果
         if st.session_state.selected_table:
@@ -630,6 +644,11 @@ def get_table_info():
         print(f"获取表信息时出错：{e}")
         return {}
 
+def clean_sql_query(sql_query):
+    # 移除可能的 Markdown 代码块标记和多余的空白字符
+    sql_query = sql_query.replace('```sql', '').replace('```', '').strip()
+    return ' '.join(sql_query.split())  # 移除多余的空白字符
+
 def nl_to_sql(nl_query):
     table_info = get_table_info()
     table_descriptions = "\n".join([f"表名: {table}\n字段: {', '.join(columns)}" for table, columns in table_info.items()])
@@ -641,12 +660,13 @@ def nl_to_sql(nl_query):
             {"role": "user", "content": f"将以下自然语言查询转换为SQL语句：\n{nl_query}\n只返回SQL语句，不要有其他解释。"}
         ]
     )
-    return response.choices[0].message.content.strip()
+    return clean_sql_query(response.choices[0].message.content.strip())
 
 def execute_sql(sql_query):
     conn = sqlite3.connect('chinook.db')
     c = conn.cursor()
     try:
+        sql_query = clean_sql_query(sql_query)  # 清理 SQL 查询
         c.execute(sql_query)
         results = c.fetchall()
         column_names = [description[0] for description in c.description]
