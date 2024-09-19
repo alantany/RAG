@@ -215,15 +215,7 @@ def main():
     </style>
     """, unsafe_allow_html=True)
 
-<<<<<<< HEAD
-<<<<<<< HEAD
     st.title("AI知识问答系统")
-=======
-    st.title("知识问答系统")
->>>>>>> 76cd04afc21c1c9eff3cabb16df669c46c0bbf1c
-=======
-    st.title("AI知识问答系统")
->>>>>>> 57d714fb5184df55d72950c2325bdcacf765f9e3
 
     # 初始化 session state
     if "rag_messages" not in st.session_state:
@@ -281,11 +273,7 @@ def main():
 
             # 添加关键词搜索功能
             st.subheader("关键词搜索")
-<<<<<<< HEAD
-            search_keywords = st.text_input("入关键词（用空格分隔）", key="rag_search_keywords_1")
-=======
-            search_keywords = st.text_input("���入关键词（用空格分隔）", key="rag_search_keywords_1")
->>>>>>> 76cd04afc21c1c9eff3cabb16df669c46c0bbf1c
+            search_keywords = st.text_input("输入关键词（用空格分隔）", key="rag_search_keywords_1")
             if search_keywords:
                 keywords = search_keywords.split()
                 relevant_docs = search_documents(keywords, st.session_state.file_indices)
@@ -296,7 +284,7 @@ def main():
                     # 存储相关文档到 session state
                     st.session_state.relevant_docs = relevant_docs
                 else:
-                    st.write("没有找到相关档。")
+                    st.write("没有找到相关文档。")
                     st.session_state.relevant_docs = None
 
         # 添加垂直分割线
