@@ -239,6 +239,18 @@ def load_all_indices():
                 file_indices[file_name] = (chunks, index)
     return file_indices
 
+def delete_index(file_name):
+    if os.path.exists(f'indices/{file_name}.pkl'):
+        os.remove(f'indices/{file_name}.pkl')
+    file_list_path = 'indices/file_list.txt'
+    if os.path.exists(file_list_path):
+        with open(file_list_path, 'r') as f:
+            file_list = f.read().splitlines()
+        if file_name in file_list:
+            file_list.remove(file_name)
+            with open(file_list_path, 'w') as f:
+                f.write('\n'.join(file_list))
+
 def main():
     st.markdown("""
     <style>
@@ -305,10 +317,18 @@ def main():
                         save_index(uploaded_file.name, chunks, index)
                     st.success(f"文档 {uploaded_file.name} 已向量化并添加到索引中！")
 
-            # 显示已处理的文件
+            # 显示已处理的文件并添加删除按钮
             st.subheader("已处理文档:")
-            for file_name in st.session_state.file_indices.keys():
-                st.write(f"• {file_name}")
+            for file_name in list(st.session_state.file_indices.keys()):
+                col1, col2 = st.columns([3, 1])
+                with col1:
+                    st.write(f"• {file_name}")
+                with col2:
+                    if st.button("删除", key=f"delete_{file_name}"):
+                        del st.session_state.file_indices[file_name]
+                        delete_index(file_name)
+                        st.success(f"文档 {file_name} 已删除！")
+                        st.rerun()
 
             # 添加关键词搜索功能
             st.subheader("关键词搜索")
@@ -363,12 +383,6 @@ def main():
             with col1:
                 prompt = st.chat_input("请基于上传的文档提出问题:", key="rag_chat_input_1")
 
-            # 清除对话按钮
-            with col2:
-                if st.button("清除对话", key="clear_rag_chat_1"):
-                    st.session_state.rag_messages = []
-                    st.rerun()
-
             if prompt:
                 st.session_state.rag_messages.append({"role": "user", "content": prompt})
                 
@@ -420,15 +434,8 @@ def main():
         # 初始化 session state
         if "web_messages" not in st.session_state:
             st.session_state.web_messages = []
-
-        # 将输入框和清除按钮放在标题下方
-        col1, col2 = st.columns([3, 1])
-        with col1:
-            web_prompt = st.text_input("请输入您的问题（如需搜索，请以'搜索'开头）:", key="web_chat_input_2")
-        with col2:
-            if st.button("清除对话", key="clear_web_chat_2"):
-                st.session_state.web_messages = []
-                st.rerun()
+        if "web_prompt" not in st.session_state:
+            st.session_state.web_prompt = ""
 
         # 创建一个容器来放置对话历史
         web_chat_container = st.container()
@@ -438,23 +445,30 @@ def main():
                 with st.chat_message(message["role"]):
                     st.markdown(message["content"])
 
-        if web_prompt:
-            st.session_state.web_messages.append({"role": "user", "content": web_prompt})
+        # 将输入框放在对话历史下方
+        web_prompt = st.text_input("请输入您的问题（如需搜索，请以'搜索'开头）:", key="web_chat_input_2", value=st.session_state.web_prompt)
+
+        if web_prompt and web_prompt != st.session_state.web_prompt:
+            current_prompt = web_prompt  # 保存当前输入
+            st.session_state.web_prompt = ""  # 立即清空输入框
+            st.session_state.web_messages.append({"role": "user", "content": current_prompt})
 
             with web_chat_container:
                 with st.chat_message("user"):
-                    st.markdown(web_prompt)
+                    st.markdown(current_prompt)
                 with st.chat_message("assistant"):
                     with st.spinner("正在搜索并生成回答..."):
                         try:
-                            if web_prompt.lower().startswith("搜索"):
-                                response = serpapi_search_qa(web_prompt[2:].strip())  # 去掉"搜索"前缀
+                            if current_prompt.lower().startswith("搜索"):
+                                response = serpapi_search_qa(current_prompt[2:].strip())  # 去掉"搜索"前缀
                             else:
-                                response = direct_qa(web_prompt)
+                                response = direct_qa(current_prompt)
                             st.markdown(response)
                             st.session_state.web_messages.append({"role": "assistant", "content": response})
                         except Exception as e:
                             st.error(f"生成回答时发生错误: {str(e)}")
+            
+            st.rerun()  # 强制重新运行应用以更新UI
 
     with tab3:
         st.header("自然语言数据库查询")
