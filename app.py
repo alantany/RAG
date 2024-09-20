@@ -1,6 +1,7 @@
 """
 AI知识问答系统安装文档
 
+
 1. 环境要求：
    - Python 3.7+
    - pip (Python包管理器)
@@ -13,20 +14,107 @@ AI知识问答系统安装文档
    pip install -r requirements.txt
 
 4. requirements.txt 文件内容：
-   streamlit
-   openai
-   sentence-transformers
-   PyPDF2
-   python-docx
-   faiss-cpu
-   tiktoken
-   serpapi
-   pandas
-   SpeechRecognition
+altair==5.4.1
+annotated-types==0.7.0
+anyio==4.4.0
+attrs==24.2.0
+blinker==1.8.2
+cachetools==5.5.0
+certifi==2024.8.30
+charset-normalizer==3.3.2
+click==8.1.7
+distro==1.9.0
+faiss-cpu==1.8.0.post1
+filelock==3.16.1
+Flask==3.0.3
+fsspec==2024.9.0
+gitdb==4.0.11
+GitPython==3.1.43
+google-api-core==2.19.2
+google-api-python-client==2.146.0
+google-auth==2.34.0
+google-auth-httplib2==0.2.0
+google_search_results==2.4.2
+googleapis-common-protos==1.65.0
+h11==0.14.0
+httpcore==1.0.5
+httplib2==0.22.0
+httpx==0.27.2
+huggingface-hub==0.25.0
+idna==3.10
+itsdangerous==2.2.0
+jieba==0.42.1
+Jinja2==3.1.4
+jiter==0.5.0
+joblib==1.4.2
+jsonschema==4.23.0
+jsonschema-specifications==2023.12.1
+lxml==5.3.0
+markdown-it-py==3.0.0
+MarkupSafe==2.1.5
+mdurl==0.1.2
+mpmath==1.3.0
+narwhals==1.8.1
+networkx==3.3
+numpy==1.26.4
+openai==1.46.0
+packaging==24.1
+pandas==2.2.2
+pillow==10.4.0
+proto-plus==1.24.0
+protobuf==5.28.1
+pyarrow==17.0.0
+pyasn1==0.6.1
+pyasn1_modules==0.4.1
+PyAudio==0.2.11
+pydantic==2.9.2
+pydantic_core==2.23.4
+pydeck==0.9.1
+Pygments==2.18.0
+pyparsing==3.1.4
+PyPDF2==3.0.1
+python-dateutil==2.9.0.post0
+python-docx==1.1.2
+pytz==2024.2
+PyYAML==6.0.2
+referencing==0.35.1
+regex==2024.9.11
+requests==2.32.3
+rich==13.8.1
+rpds-py==0.20.0
+rsa==4.9
+safetensors==0.4.5
+scikit-learn==1.5.2
+scipy==1.14.1
+sentence-transformers==3.1.0
+six==1.16.0
+smmap==5.0.1
+sniffio==1.3.1
+SpeechRecognition==3.10.4
+streamlit==1.38.0
+sympy==1.13.2
+tenacity==8.5.0
+threadpoolctl==3.5.0
+tiktoken==0.7.0
+tokenizers==0.19.1
+toml==0.10.2
+torch==2.2.2
+tornado==6.4.1
+tqdm==4.66.5
+transformers==4.44.2
+typing_extensions==4.12.2
+tzdata==2024.1
+uritemplate==4.1.1
+urllib3==2.2.3
+Werkzeug==3.0.4
+
 
 5. 其他依赖：
    - 确保你有有效的OpenAI API密钥
    - 如果使用Google搜索功能，需要有效的SerpAPI密钥
+   - 对于语音识别功能，需要安装系统级依赖 PortAudio。这在某些托管环境（如 Streamlit Cloud）中可能无法直接安装。
+     如果在托管环境中遇到问题，可能需要考虑使用基于浏览器的语音识别方案或云端语音识别服务。
+   - 对于大型文件处理，可能需要增加系统内存或使用更强大的硬件
 
 6. 运行应用：
    streamlit run app.py
@@ -34,7 +122,8 @@ AI知识问答系统安装文档
 注意：
 - 请确保所有依赖都已正确安装
 - 在代码中替换OpenAI API密钥和SerpAPI密钥为你自己的密钥
-- 对于语音识别功能，可能需要额外安装系统级依赖，如PortAudio
+- 对于语音识别功能，需要安装系统级依赖 PortAudio。这在某些托管环境（如 Streamlit Cloud）中可能无法直接安装。
+  如果在托管环境中遇到问题，可能需要考虑使用基于浏览器的语音识别方案或云端语音识别服务。
 - 对于大型文件处理，可能需要增加系统内存或使用更强大的硬件
 """
 
@@ -610,7 +699,7 @@ def serpapi_search_qa(query, num_results=3):
     response = client.chat.completions.create(
         model="gpt-3.5-turbo",
         messages=[
-            {"role": "system", "content": "你是一个有帮助的助手，能够根��搜索结果回答问题"},
+            {"role": "system", "content": "你是一个有帮助的助手，能够根搜索结果回答问题"},
             {"role": "user", "content": prompt}
         ]
     )
