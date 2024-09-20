@@ -40,7 +40,24 @@ AI知识问答系统安装文档
 import streamlit as st
 
 # 设置页面配置必须是第一个 Streamlit 命令
-st.set_page_config(layout="wide", page_title="RAG 知识问答系统")
+st.set_page_config(
+    page_title="AI知识问答系统",
+    page_icon="🧠",
+    layout="wide",
+    initial_sidebar_state="collapsed",
+    menu_items=None
+)
+
+# 隐藏 Streamlit 默认的菜单、页脚和 Deploy 按钮
+hide_streamlit_style = """
+    <style>
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    .stDeployButton {display: none;}
+    header {visibility: hidden;}
+    </style>
+"""
+st.markdown(hide_streamlit_style, unsafe_allow_html=True)
 
 from openai import OpenAI
 from sentence_transformers import SentenceTransformer
@@ -330,7 +347,7 @@ def main():
                         st.success(f"文档 {file_name} 已删除！")
                         st.rerun()
 
-            # 添加关键词搜索功能
+            # 添加关键词搜索功���
             st.subheader("关键词搜索")
             search_keywords = st.text_input("输入关键词（用空格分隔）", key="rag_search_keywords_1")
             if search_keywords:
@@ -537,7 +554,7 @@ def main():
         if st.session_state.show_db_info:
             table_info = get_table_info()
             if not table_info:
-                st.error("无法获取数据库信息。请检查数据库连接。")
+                st.error("无法获取数据库息。请检查数据库连接。")
             else:
                 st.success(f"成功获取到 {len(table_info)} 个表的信息")
                 
