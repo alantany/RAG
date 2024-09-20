@@ -232,7 +232,7 @@ def save_index(file_name, chunks, index):
         os.makedirs('indices')
     with open(f'indices/{file_name}.pkl', 'wb') as f:
         pickle.dump((chunks, index), f)
-    # ���文件名到一个列表中
+    # ���名到一个列表中
     file_list_path = 'indices/file_list.txt'
     if os.path.exists(file_list_path):
         with open(file_list_path, 'r') as f:
@@ -293,8 +293,10 @@ def main():
         st.session_state.rag_messages = []
     if "file_indices" not in st.session_state:
         st.session_state.file_indices = load_all_indices()
+    if "voice_input" not in st.session_state:
+        st.session_state.voice_input = ""
 
-    # 创标签
+    # 创建标签
     tab1, tab2, tab3 = st.tabs(["RAG 问答", "网络搜索问答", "数据库查询"])
 
     with tab1:
@@ -350,14 +352,14 @@ def main():
                         st.success(f"文档 {file_name} 已删除！")
                         st.rerun()
 
-            # 添加关键词搜索功
+            # 添加关键词搜索功能
             st.subheader("关键词搜索")
             search_keywords = st.text_input("输入关键词（用空格分隔）", key="rag_search_keywords_1")
             if search_keywords:
                 keywords = search_keywords.split()
                 relevant_docs = search_documents(keywords, st.session_state.file_indices)
                 if relevant_docs:
-                    st.write("相文档：")
+                    st.write("相关文档：")
                     for doc in relevant_docs:
                         st.write(f"• {doc}")
                     # 存储相关文档到 session state
@@ -396,57 +398,85 @@ def main():
                         if "relevant_excerpt" in message:
                             st.markdown(f"**相关原文：** <mark>{message['relevant_excerpt']}</mark>", unsafe_allow_html=True)
 
-            # 创建一个列布局来放置输入框和清除对话按钮
-            col1, col2 = st.columns([3, 1])
+            # 创建一个可更新的占位符来显示语音输入状态
+            status_placeholder = st.empty()
 
-            # 用户输入
-            with col1:
-                prompt = st.chat_input("请基于上传的文档提出问题:", key="rag_chat_input_1")
+            # 创建一个按钮来触发语音输入
+            if st.button("开始语音输入", key="rag_voice_input_button"):
+                status_placeholder.text("正在准备录音...")
+                recognizer = sr.Recognizer()
+                try:
+                    with sr.Microphone() as source:
+                        status_placeholder.text("正在录音...请说话（最长15秒）")
+                        recognizer.adjust_for_ambient_noise(source, duration=1)
+                        audio = recognizer.listen(source, timeout=15, phrase_time_limit=15)
+                    status_placeholder.text("录音完成，正在识别...")
+                    try:
+                        text = recognizer.recognize_google(audio, language="zh-CN")
+                        status_placeholder.text(f"语音输入识别成功: {text}")
+                        st.session_state.voice_input = text
+                    except sr.UnknownValueError:
+                        status_placeholder.text("无法识别语音，请重试")
+                    except sr.RequestError as e:
+                        status_placeholder.text(f"无法从Google Speech Recognition服务获取结果")
+                except sr.WaitTimeoutError:
+                    status_placeholder.text("未检测到语音，请确保麦克风正常工作并重试")
+                except Exception as e:
+                    status_placeholder.text(f"录音过程中出现错误")
 
-            if prompt:
-                st.session_state.rag_messages.append({"role": "user", "content": prompt})
-                
-                if st.session_state.file_indices:
-                    with chat_container:
-                        with st.chat_message("user"):
-                            st.markdown(prompt)
-                        with st.chat_message("assistant"):
-                            with st.spinner("正在生成回答..."):
-                                try:
-                                    # 使用保存的相关文档（如果有的话）
-                                    relevant_docs = st.session_state.get('relevant_docs')
-                                    response, sources, relevant_excerpt = rag_qa(prompt, st.session_state.file_indices, relevant_docs)
-                                    st.markdown(response)
-                                    if sources:
-                                        st.markdown("**参考来源：**")
-                                        file_name, _ = sources[0]
-                                        st.markdown(f"**文件：** {file_name}")
-                                        if os.path.exists(f'indices/{file_name}.pkl'):
-                                            with open(f'indices/{file_name}.pkl', 'rb') as f:
-                                                file_content = pickle.load(f)[0]  # 获取文件内容
-                                            st.download_button(
-                                                label="下载源文件",
-                                                data='\n'.join(file_content),
-                                                file_name=file_name,
-                                                mime='text/plain',
-                                                key=f"download_new_{len(st.session_state.rag_messages)}"
-                                            )
-                                    if relevant_excerpt:
-                                        st.markdown(f"**相关原文：** <mark>{relevant_excerpt}</mark>", unsafe_allow_html=True)
-                                    else:
-                                        st.warning("未能提取到精确的相关原文，但找到相关信息。")
-                                except Exception as e:
-                                    st.error(f"生成回答时发生错误: {str(e)}")
-                    st.session_state.rag_messages.append({
-                        "role": "assistant", 
-                        "content": response, 
-                        "sources": sources,
-                        "relevant_excerpt": relevant_excerpt
-                    })
-                else:
-                    with chat_container:
-                        with st.chat_message("assistant"):
-                            st.warning("请先上传文档。")
+            # 显示语音输入结果或允许手动输入
+            prompt = st.text_input("请基于上传的文档提出问题:", value=st.session_state.voice_input, key="rag_user_input")
+
+            # 提交按钮
+            if st.button("提交", key="rag_submit_button"):
+                if prompt:
+                    st.session_state.rag_messages.append({"role": "user", "content": prompt})
+                    
+                    if st.session_state.file_indices:
+                        with chat_container:
+                            with st.chat_message("user"):
+                                st.markdown(prompt)
+                            with st.chat_message("assistant"):
+                                with st.spinner("正在生成回答..."):
+                                    try:
+                                        # 使用保存的相关文档（如果有的话）
+                                        relevant_docs = st.session_state.get('relevant_docs')
+                                        response, sources, relevant_excerpt = rag_qa(prompt, st.session_state.file_indices, relevant_docs)
+                                        st.markdown(response)
+                                        if sources:
+                                            st.markdown("**参考来源：**")
+                                            file_name, _ = sources[0]
+                                            st.markdown(f"**文件：** {file_name}")
+                                            if os.path.exists(f'indices/{file_name}.pkl'):
+                                                with open(f'indices/{file_name}.pkl', 'rb') as f:
+                                                    file_content = pickle.load(f)[0]  # 获取件内容
+                                                st.download_button(
+                                                    label="下载源文件",
+                                                    data='\n'.join(file_content),
+                                                    file_name=file_name,
+                                                    mime='text/plain',
+                                                    key=f"download_new_{len(st.session_state.rag_messages)}"
+                                                )
+                                        if relevant_excerpt:
+                                            st.markdown(f"**相关原文：** <mark>{relevant_excerpt}</mark>", unsafe_allow_html=True)
+                                        else:
+                                            st.warning("未能提取到精确的相关原文，但找到相关信息。")
+                                    except Exception as e:
+                                        st.error(f"生成回答时发生错误: {str(e)}")
+                        st.session_state.rag_messages.append({
+                            "role": "assistant", 
+                            "content": response, 
+                            "sources": sources,
+                            "relevant_excerpt": relevant_excerpt
+                        })
+                    else:
+                        with chat_container:
+                            with st.chat_message("assistant"):
+                                st.warning("请先上传文档。")
+                    
+                    # 清空语音输入
+                    st.session_state.voice_input = ""
+                    st.rerun()
 
     with tab2:
         st.header("网络搜索问答")
@@ -469,7 +499,7 @@ def main():
         status_placeholder = st.empty()
 
         # 创建一个按钮来触发语音输入
-        if st.button("开始语音输入"):
+        if st.button("开始语音输入", key="web_voice_input_button"):
             status_placeholder.text("正在准备录音...")
             recognizer = sr.Recognizer()
             try:
@@ -492,10 +522,10 @@ def main():
                 status_placeholder.text(f"录音过程中出现错误")
 
         # 显示语音输入结果或允许手动输入
-        user_input = st.text_input("输入您的问题（如需搜索，请以'搜索'开头）:", value=st.session_state.voice_input, key="user_input")
+        user_input = st.text_input("输入您的问题（如需搜索，请以'搜索'开头）:", value=st.session_state.voice_input, key="web_user_input")
 
         # 提交按钮
-        if st.button("提交"):
+        if st.button("提交", key="web_submit_button"):
             if user_input:
                 st.session_state.web_messages.append({"role": "user", "content": user_input})
                 
@@ -534,6 +564,14 @@ def main():
         # 初始化 session state
         if "db_messages" not in st.session_state:
             st.session_state.db_messages = []
+        if "voice_input" not in st.session_state:
+            st.session_state.voice_input = ""
+        if "query_result" not in st.session_state:
+            st.session_state.query_result = None
+        if "sql_query" not in st.session_state:
+            st.session_state.sql_query = ""
+        if "query_explanation" not in st.session_state:
+            st.session_state.query_explanation = ""
 
         # 创建一个容器来放置对话历史
         db_chat_container = st.container()
@@ -543,36 +581,81 @@ def main():
                 with st.chat_message(message["role"]):
                     st.markdown(message["content"])
 
-        # 用户输入
-        nl_query = st.chat_input("请输入您的自然语言查询:", key="db_chat_input")
+        # 创建一个可更新的占位符来显示语音输入状态
+        status_placeholder = st.empty()
 
-        if nl_query:
-            st.session_state.db_messages.append({"role": "user", "content": nl_query})
-            
-            with db_chat_container:
-                with st.chat_message("user"):
-                    st.markdown(nl_query)
-                with st.chat_message("assistant"):
-                    with st.spinner("正在生成SQL并执行查询..."):
-                        try:
-                            sql_query = nl_to_sql(nl_query)
-                            st.code(sql_query, language="sql")
-                            
-                            results, column_names = execute_sql(sql_query)
-                            if isinstance(results, str):
-                                st.error(results)
-                            else:
-                                df = pd.DataFrame(results, columns=column_names)
-                                st.dataframe(df)
+        # 创建一个按钮来触发语音输入
+        if st.button("开始语音输入", key="db_voice_input_button"):
+            status_placeholder.text("正在准备录音...")
+            recognizer = sr.Recognizer()
+            try:
+                with sr.Microphone() as source:
+                    status_placeholder.text("正在录音...请说话（最长15秒）")
+                    recognizer.adjust_for_ambient_noise(source, duration=1)
+                    audio = recognizer.listen(source, timeout=15, phrase_time_limit=15)
+                status_placeholder.text("录音完成，正在识别...")
+                try:
+                    text = recognizer.recognize_google(audio, language="zh-CN")
+                    status_placeholder.text(f"语音输入识别成功: {text}")
+                    st.session_state.voice_input = text
+                except sr.UnknownValueError:
+                    status_placeholder.text("无法识别语音，请重试")
+                except sr.RequestError as e:
+                    status_placeholder.text(f"无法从Google Speech Recognition服务获取结果")
+            except sr.WaitTimeoutError:
+                status_placeholder.text("未检测到语音，请确保麦克风正常工作并重试")
+            except Exception as e:
+                status_placeholder.text(f"录音过程中出现错误")
 
-                                # 生成自然语言解释
-                                explanation = generate_explanation(nl_query, sql_query, df)
-                                st.markdown(explanation, unsafe_allow_html=True)
-                            
-                            response = f"SQL查询:\n```sql\n{sql_query}\n```\n\n解释:\n{explanation}"
-                            st.session_state.db_messages.append({"role": "assistant", "content": response})
-                        except Exception as e:
-                            st.error(f"查询执行错误: {str(e)}")
+        # 显示语音输入结果或允许手动输入
+        nl_query = st.text_input("输入您的自然语言查询:", value=st.session_state.voice_input, key="db_user_input")
+
+        # 提交按钮
+        if st.button("提交查询", key="db_submit_button"):
+            if nl_query:
+                st.session_state.db_messages.append({"role": "user", "content": nl_query})
+                
+                with db_chat_container:
+                    with st.chat_message("user"):
+                        st.markdown(nl_query)
+                    with st.chat_message("assistant"):
+                        with st.spinner("正在生成SQL并执行查询..."):
+                            try:
+                                sql_query = nl_to_sql(nl_query)
+                                st.session_state.sql_query = sql_query
+                                
+                                results, column_names = execute_sql(sql_query)
+                                if isinstance(results, str):
+                                    st.error(results)
+                                else:
+                                    df = pd.DataFrame(results, columns=column_names)
+                                    st.session_state.query_result = df
+
+                                    # 生成自然语言解释
+                                    explanation = generate_explanation(nl_query, sql_query, df)
+                                    st.session_state.query_explanation = explanation
+                                
+                                response = f"SQL查询:\n```sql\n{sql_query}\n```\n\n查询结果:\n{df.to_markdown()}\n\n解释:\n{explanation}"
+                                st.session_state.db_messages.append({"role": "assistant", "content": response})
+                            except Exception as e:
+                                st.error(f"查询执行错误: {str(e)}")
+                
+                # 清空语音输入
+                st.session_state.voice_input = ""
+                st.rerun()
+
+        # 显示存储的查询结果（如果有）
+        if st.session_state.sql_query:
+            st.subheader("生成的SQL查询:")
+            st.code(st.session_state.sql_query, language="sql")
+
+        if st.session_state.query_result is not None:
+            st.subheader("查询结果:")
+            st.dataframe(st.session_state.query_result)
+
+        if st.session_state.query_explanation:
+            st.subheader("查询结果解释:")
+            st.markdown(st.session_state.query_explanation, unsafe_allow_html=True)
 
         # 数据库信息显示部分保持不变
         if 'show_db_info' not in st.session_state:
@@ -580,14 +663,14 @@ def main():
         if 'selected_table' not in st.session_state:
             st.session_state.selected_table = None
 
-        if st.button("显示/隐藏数据库信息"):
+        if st.button("显示/隐藏数据库信息", key="toggle_db_info"):
             st.session_state.show_db_info = not st.session_state.show_db_info
             st.session_state.selected_table = None  # 重置选中的表
 
         if st.session_state.show_db_info:
             table_info = get_table_info()
             if not table_info:
-                st.error("无法获取数据库息。请检查数据库连接。")
+                st.error("无法获取数据库信息。请检查数据库连接。")
             else:
                 st.success(f"成功获取到 {len(table_info)} 个表的信息")
                 
@@ -595,7 +678,7 @@ def main():
                 cols = st.columns(4)  # 每行4个表名
                 for i, table in enumerate(table_info.keys()):
                     with cols[i % 4]:
-                        if st.button(table, key=f"table_{table}"):
+                        if st.button(table, key=f"table_button_{table}"):
                             st.session_state.selected_table = table
 
         # 在表名下方显示查询结果
@@ -660,7 +743,7 @@ def download_and_create_database():
         with open('chinook.db', 'wb') as f:
             f.write(response.content)
         
-        print("数据库文件已下载并保存")
+        print("数据库文件已下载并存")
         
         conn = sqlite3.connect('chinook.db')
         c = conn.cursor()
@@ -739,7 +822,7 @@ def generate_explanation(nl_query, sql_query, df):
         "2. 结果的概述\n"
         "3. 任何有趣或重要的发现\n\n"
         "请确保解释简洁明了，适合非技术人员理解。"
-        "在解释中，请用**双星号**将与结果直接相关的重要数字或关键词括起来，以便后续高亮显示。"
+        "在解释中，请用**双星号**将与结果直接相关的重要数字或关键词括起来。"
     )
 
     response = client.chat.completions.create(
@@ -751,13 +834,10 @@ def generate_explanation(nl_query, sql_query, df):
     )
     explanation = response.choices[0].message.content.strip()
     
-    # 将双星号包围的文本转换为HTML的高亮标记
-    highlighted_explanation = explanation.replace("**", "<mark>", 1)
-    while "**" in highlighted_explanation:
-        highlighted_explanation = highlighted_explanation.replace("**", "</mark>", 1)
-        highlighted_explanation = highlighted_explanation.replace("**", "<mark>", 1)
+    # 将双星号包围的文本转换为加粗文本
+    explanation = explanation.replace("**", "**")
     
-    return highlighted_explanation
+    return explanation
 
 # 运行主应用
 if __name__ == "__main__":
