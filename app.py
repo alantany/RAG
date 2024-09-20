@@ -22,7 +22,7 @@ AI知识问答系统安装文档
    tiktoken
    serpapi
    pandas
-   sqlite3  # 通常已包含在Python标准库中
+   SpeechRecognition
 
 5. 其他依赖：
    - 确保你有有效的OpenAI API密钥
@@ -34,6 +34,7 @@ AI知识问答系统安装文档
 注意：
 - 请确保所有依赖都已正确安装
 - 在代码中替换OpenAI API密钥和SerpAPI密钥为你自己的密钥
+- 对于语音识别功能，可能需要额外安装系统级依赖，如PortAudio
 - 对于大型文件处理，可能需要增加系统内存或使用更强大的硬件
 """
 
@@ -232,7 +233,7 @@ def save_index(file_name, chunks, index):
         os.makedirs('indices')
     with open(f'indices/{file_name}.pkl', 'wb') as f:
         pickle.dump((chunks, index), f)
-    # 更���表
+    # 更
     file_list_path = 'indices/file_list.txt'
     if os.path.exists(file_list_path):
         with open(file_list_path, 'r') as f:
@@ -283,36 +284,22 @@ def main():
     .stColumn {
         padding: 0px;
     }
-    .voice-input-container {
-        display: flex;
-        align-items: center;
-    }
-    .voice-input-button {
-        background: none;
-        border: none;
-        color: inherit;
-        padding: 0;
-        font: inherit;
-        cursor: pointer;
-        outline: inherit;
-        margin-right: 10px;
-    }
     .input-group {
         display: flex;
-        align-items: center;
+        flex-direction: column;
+        align-items: flex-start;
     }
-    .input-group .stButton {
+    .button-group {
+        display: flex;
+        justify-content: flex-start;
+        margin-top: 10px;
+        width: 100%;
+    }
+    .button-group .stButton {
         margin-right: 10px;
     }
-    .input-group .stTextInput {
-        flex-grow: 1;
-    }
-    .input-label {
-        display: flex;
-        align-items: center;
-    }
-    .input-label .stButton {
-        margin-left: 5px;
+    .stTextInput > div > div > input {
+        width: 100%;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -324,8 +311,12 @@ def main():
         st.session_state.rag_messages = []
     if "file_indices" not in st.session_state:
         st.session_state.file_indices = load_all_indices()
-    if "voice_input" not in st.session_state:
-        st.session_state.voice_input = ""
+    if "rag_voice_input" not in st.session_state:
+        st.session_state.rag_voice_input = ""
+    if "web_voice_input" not in st.session_state:
+        st.session_state.web_voice_input = ""
+    if "db_voice_input" not in st.session_state:
+        st.session_state.db_voice_input = ""
 
     # 创建标签
     tab1, tab2, tab3 = st.tabs(["RAG 问答", "网络搜索问答", "数据库查询"])
@@ -370,7 +361,7 @@ def main():
                         save_index(uploaded_file.name, chunks, index)
                     st.success(f"文档 {uploaded_file.name} 已向量化并添加到索引中！")
 
-            # 显示已理的文件并添加删除按钮
+            # 显示已理的文档并添加删除按钮
             st.subheader("已处文档:")
             for file_name in list(st.session_state.file_indices.keys()):
                 col1, col2 = st.columns([3, 1])
@@ -434,12 +425,19 @@ def main():
 
             # 创建一个按钮来触发语音输入
             st.markdown('<div class="input-group">', unsafe_allow_html=True)
-            prompt = st.text_input("请基于上传的文档提出问题:", value=st.session_state.voice_input, key="rag_user_input", on_change=handle_rag_input)
-            if st.button("🎤", key="rag_voice_input_button", help="点击开始语音输入"):
-                result = perform_speech_recognition()
-                if result:
-                    st.session_state.voice_input = result
-                    st.rerun()
+            prompt = st.text_input("请基于上传的文档提出问题:", value=st.session_state.rag_voice_input, key="rag_user_input")
+            st.markdown('<div class="button-group">', unsafe_allow_html=True)
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("🎤 语音输入", key="rag_voice_input_button", help="点击开始语音输入"):
+                    result = perform_speech_recognition()
+                    if result:
+                        st.session_state.rag_voice_input = result
+                        st.rerun()
+            with col2:
+                if st.button("查询", key="rag_query_button"):
+                    handle_rag_input()
+            st.markdown('</div>', unsafe_allow_html=True)
             st.markdown('</div>', unsafe_allow_html=True)
 
     with tab2:
@@ -448,8 +446,6 @@ def main():
         # 初始化 session state
         if "web_messages" not in st.session_state:
             st.session_state.web_messages = []
-        if "voice_input" not in st.session_state:
-            st.session_state.voice_input = ""
 
         # 创建一个容器来放置对话历史
         web_chat_container = st.container()
@@ -464,12 +460,19 @@ def main():
 
         # 创建一个按钮来触发语音输入
         st.markdown('<div class="input-group">', unsafe_allow_html=True)
-        user_input = st.text_input("输入您的问题（如需搜索，请以'搜索'开头）:", value=st.session_state.voice_input, key="web_user_input", on_change=handle_web_input)
-        if st.button("🎤", key="web_voice_input_button", help="点击开始语音输入"):
-            result = perform_speech_recognition()
-            if result:
-                st.session_state.voice_input = result
-                st.rerun()
+        user_input = st.text_input("输入您的问题（如需搜索，请以'搜索'开头）:", value=st.session_state.web_voice_input, key="web_user_input")
+        st.markdown('<div class="button-group">', unsafe_allow_html=True)
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("🎤 语音输入", key="web_voice_input_button", help="点击开始语音输入"):
+                result = perform_speech_recognition()
+                if result:
+                    st.session_state.web_voice_input = result
+                    st.rerun()
+        with col2:
+            if st.button("查询", key="web_query_button"):
+                handle_web_input()
+        st.markdown('</div>', unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
     with tab3:
@@ -488,8 +491,6 @@ def main():
         # 初始化 session state
         if "db_messages" not in st.session_state:
             st.session_state.db_messages = []
-        if "voice_input" not in st.session_state:
-            st.session_state.voice_input = ""
         if "query_result" not in st.session_state:
             st.session_state.query_result = None
         if "sql_query" not in st.session_state:
@@ -510,12 +511,19 @@ def main():
 
         # 创建一个按钮来触发语音输入
         st.markdown('<div class="input-group">', unsafe_allow_html=True)
-        nl_query = st.text_input("输入您的自然语言查询:", value=st.session_state.voice_input, key="db_user_input", on_change=handle_db_input)
-        if st.button("🎤", key="db_voice_input_button", help="点击开始语音输入"):
-            result = perform_speech_recognition()
-            if result:
-                st.session_state.voice_input = result
-                st.rerun()
+        nl_query = st.text_input("输入您的自然语言查询:", value=st.session_state.db_voice_input, key="db_user_input")
+        st.markdown('<div class="button-group">', unsafe_allow_html=True)
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("🎤 语音输入", key="db_voice_input_button", help="点击开始语音输入"):
+                result = perform_speech_recognition()
+                if result:
+                    st.session_state.db_voice_input = result
+                    st.rerun()
+        with col2:
+            if st.button("查询", key="db_query_button"):
+                handle_db_input()
+        st.markdown('</div>', unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
         # 显示存储的查询结果（如果有）
@@ -602,7 +610,7 @@ def serpapi_search_qa(query, num_results=3):
     response = client.chat.completions.create(
         model="gpt-3.5-turbo",
         messages=[
-            {"role": "system", "content": "你是一个有帮助的助手，能够根据搜索结果回答问题。"},
+            {"role": "system", "content": "你是一个有帮助的助手，能够根��搜索结果回答问题"},
             {"role": "user", "content": prompt}
         ]
     )
@@ -696,7 +704,7 @@ def generate_explanation(nl_query, sql_query, df):
         "2. 结果的概述\n"
         "3. 任何有趣或重要的发现\n\n"
         "请确保解释简洁明了，适合非技术人员理解。"
-        "在解释中，请用**双星号**将与结果直接相关的重要数字或关键词括起来。"
+        "在解释中，请用**双星号**与结果直接相关的重要数字或关键词括起来。"
     )
 
     response = client.chat.completions.create(
@@ -732,8 +740,8 @@ def perform_speech_recognition():
     return None
 
 def handle_rag_input():
-    prompt = st.session_state.rag_user_input
-    if prompt:
+    if st.session_state.rag_user_input:
+        prompt = st.session_state.rag_user_input
         st.session_state.rag_messages.append({"role": "user", "content": prompt})
         if st.session_state.file_indices:
             with st.spinner("正在生成回答..."):
@@ -750,12 +758,12 @@ def handle_rag_input():
                     st.error(f"生成回答时发生错误: {str(e)}")
         else:
             st.warning("请先上传文档。")
-        st.session_state.voice_input = ""
+        st.session_state.rag_voice_input = ""
         st.rerun()
 
 def handle_web_input():
-    user_input = st.session_state.web_user_input
-    if user_input:
+    if st.session_state.web_user_input:
+        user_input = st.session_state.web_user_input
         st.session_state.web_messages.append({"role": "user", "content": user_input})
         with st.spinner("正在搜索并生成回答..."):
             try:
@@ -766,12 +774,12 @@ def handle_web_input():
                 st.session_state.web_messages.append({"role": "assistant", "content": response})
             except Exception as e:
                 st.error(f"生成回答时发生错误: {str(e)}")
-        st.session_state.voice_input = ""
+        st.session_state.web_voice_input = ""
         st.rerun()
 
 def handle_db_input():
-    nl_query = st.session_state.db_user_input
-    if nl_query:
+    if st.session_state.db_user_input:
+        nl_query = st.session_state.db_user_input
         st.session_state.db_messages.append({"role": "user", "content": nl_query})
         with st.spinner("正在生成SQL并执行查询..."):
             try:
@@ -789,7 +797,7 @@ def handle_db_input():
                     st.session_state.db_messages.append({"role": "assistant", "content": response})
             except Exception as e:
                 st.error(f"查询执行错误: {str(e)}")
-        st.session_state.voice_input = ""
+        st.session_state.db_voice_input = ""
         st.rerun()
 
 # 运行主应用
