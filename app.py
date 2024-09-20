@@ -176,7 +176,7 @@ def rag_qa(query, file_indices, relevant_docs=None):
     context = []
     context_with_sources = []
     for i in I[0]:
-        if 0 <= i < len(all_chunks):  # 确索引在有效范围内
+        if 0 <= i < len(all_chunks):  # 确引在有效范围内
             chunk = all_chunks[i]
             context.append(chunk)
             file_name = chunk_to_file.get(i, "未知文件")
@@ -232,7 +232,7 @@ def save_index(file_name, chunks, index):
         os.makedirs('indices')
     with open(f'indices/{file_name}.pkl', 'wb') as f:
         pickle.dump((chunks, index), f)
-    # ���名到一个列表中
+    # 更���列表
     file_list_path = 'indices/file_list.txt'
     if os.path.exists(file_list_path):
         with open(file_list_path, 'r') as f:
@@ -281,7 +281,31 @@ def main():
         padding-bottom: 1rem;
     }
     .stColumn {
-        padding: 5px;
+        padding: 0px;
+    }
+    .voice-input-container {
+        display: flex;
+        align-items: center;
+    }
+    .voice-input-button {
+        background: none;
+        border: none;
+        color: inherit;
+        padding: 0;
+        font: inherit;
+        cursor: pointer;
+        outline: inherit;
+        margin-right: 10px;
+    }
+    .input-group {
+        display: flex;
+        align-items: center;
+    }
+    .input-group .stButton {
+        margin-right: 10px;
+    }
+    .input-group .stTextInput {
+        flex-grow: 1;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -339,8 +363,8 @@ def main():
                         save_index(uploaded_file.name, chunks, index)
                     st.success(f"文档 {uploaded_file.name} 已向量化并添加到索引中！")
 
-            # 显示已处理的文件并添加删除按钮
-            st.subheader("已处理文档:")
+            # 显示已理的文件并添加删除按钮
+            st.subheader("已处文档:")
             for file_name in list(st.session_state.file_indices.keys()):
                 col1, col2 = st.columns([3, 1])
                 with col1:
@@ -402,30 +426,14 @@ def main():
             status_placeholder = st.empty()
 
             # 创建一个按钮来触发语音输入
-            if st.button("开始语音输入", key="rag_voice_input_button"):
-                status_placeholder.text("正在准备录音...")
-                recognizer = sr.Recognizer()
-                try:
-                    with sr.Microphone() as source:
-                        status_placeholder.text("正在录音...请说话（最长15秒）")
-                        recognizer.adjust_for_ambient_noise(source, duration=1)
-                        audio = recognizer.listen(source, timeout=15, phrase_time_limit=15)
-                    status_placeholder.text("录音完成，正在识别...")
-                    try:
-                        text = recognizer.recognize_google(audio, language="zh-CN")
-                        status_placeholder.text(f"语音输入识别成功: {text}")
-                        st.session_state.voice_input = text
-                    except sr.UnknownValueError:
-                        status_placeholder.text("无法识别语音，请重试")
-                    except sr.RequestError as e:
-                        status_placeholder.text(f"无法从Google Speech Recognition服务获取结果")
-                except sr.WaitTimeoutError:
-                    status_placeholder.text("未检测到语音，请确保麦克风正常工作并重试")
-                except Exception as e:
-                    status_placeholder.text(f"录音过程中出现错误")
-
-            # 显示语音输入结果或允许手动输入
+            st.markdown('<div class="input-group">', unsafe_allow_html=True)
             prompt = st.text_input("请基于上传的文档提出问题:", value=st.session_state.voice_input, key="rag_user_input")
+            if st.button("🎤", key="rag_voice_input_button", help="点击开始语音输入"):
+                result = perform_speech_recognition()
+                if result:
+                    st.session_state.voice_input = result
+                    st.rerun()
+            st.markdown('</div>', unsafe_allow_html=True)
 
             # 提交按钮
             if st.button("提交", key="rag_submit_button"):
@@ -499,30 +507,14 @@ def main():
         status_placeholder = st.empty()
 
         # 创建一个按钮来触发语音输入
-        if st.button("开始语音输入", key="web_voice_input_button"):
-            status_placeholder.text("正在准备录音...")
-            recognizer = sr.Recognizer()
-            try:
-                with sr.Microphone() as source:
-                    status_placeholder.text("正在录音...请说话（最长15秒）")
-                    recognizer.adjust_for_ambient_noise(source, duration=1)
-                    audio = recognizer.listen(source, timeout=15, phrase_time_limit=15)
-                status_placeholder.text("录音完成，正在识别...")
-                try:
-                    text = recognizer.recognize_google(audio, language="zh-CN")
-                    status_placeholder.text(f"语音输入识别成功: {text}")
-                    st.session_state.voice_input = text
-                except sr.UnknownValueError:
-                    status_placeholder.text("无法识别语音，请重试")
-                except sr.RequestError as e:
-                    status_placeholder.text(f"无法从Google Speech Recognition服务获取结果")
-            except sr.WaitTimeoutError:
-                status_placeholder.text("未检测到语音，请确保麦克风正常工作并重试")
-            except Exception as e:
-                status_placeholder.text(f"录音过程中出现错误")
-
-        # 显示语音输入结果或允许手动输入
+        st.markdown('<div class="input-group">', unsafe_allow_html=True)
         user_input = st.text_input("输入您的问题（如需搜索，请以'搜索'开头）:", value=st.session_state.voice_input, key="web_user_input")
+        if st.button("🎤", key="web_voice_input_button", help="点击开始语音输入"):
+            result = perform_speech_recognition()
+            if result:
+                st.session_state.voice_input = result
+                st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
 
         # 提交按钮
         if st.button("提交", key="web_submit_button"):
@@ -585,30 +577,14 @@ def main():
         status_placeholder = st.empty()
 
         # 创建一个按钮来触发语音输入
-        if st.button("开始语音输入", key="db_voice_input_button"):
-            status_placeholder.text("正在准备录音...")
-            recognizer = sr.Recognizer()
-            try:
-                with sr.Microphone() as source:
-                    status_placeholder.text("正在录音...请说话（最长15秒）")
-                    recognizer.adjust_for_ambient_noise(source, duration=1)
-                    audio = recognizer.listen(source, timeout=15, phrase_time_limit=15)
-                status_placeholder.text("录音完成，正在识别...")
-                try:
-                    text = recognizer.recognize_google(audio, language="zh-CN")
-                    status_placeholder.text(f"语音输入识别成功: {text}")
-                    st.session_state.voice_input = text
-                except sr.UnknownValueError:
-                    status_placeholder.text("无法识别语音，请重试")
-                except sr.RequestError as e:
-                    status_placeholder.text(f"无法从Google Speech Recognition服务获取结果")
-            except sr.WaitTimeoutError:
-                status_placeholder.text("未检测到语音，请确保麦克风正常工作并重试")
-            except Exception as e:
-                status_placeholder.text(f"录音过程中出现错误")
-
-        # 显示语音输入结果或允许手动输入
+        st.markdown('<div class="input-group">', unsafe_allow_html=True)
         nl_query = st.text_input("输入您的自然语言查询:", value=st.session_state.voice_input, key="db_user_input")
+        if st.button("🎤", key="db_voice_input_button", help="点击开始语音输入"):
+            result = perform_speech_recognition()
+            if result:
+                st.session_state.voice_input = result
+                st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
 
         # 提交按钮
         if st.button("提交查询", key="db_submit_button"):
@@ -789,7 +765,7 @@ def nl_to_sql(nl_query):
     response = client.chat.completions.create(
         model="gpt-3.5-turbo",
         messages=[
-            {"role": "system", "content": f"你是一个SQL专家，能够将自然语言查询转换为SQL语句。数据库包含以下表和字段：\n\n{table_descriptions}"},
+            {"role": "system", "content": f"你是一个SQL专，能够将自然语言查询转换为SQL语句。数据库包含以下表和字段：\n\n{table_descriptions}"},
             {"role": "user", "content": f"将以下自然语言查询转换为SQL语句：\n{nl_query}\n只返回SQL语句，不要有其他解释。"}
         ]
     )
@@ -838,6 +814,24 @@ def generate_explanation(nl_query, sql_query, df):
     explanation = explanation.replace("**", "**")
     
     return explanation
+
+def perform_speech_recognition():
+    recognizer = sr.Recognizer()
+    try:
+        with sr.Microphone() as source:
+            st.write("正在录音...请说话")
+            audio = recognizer.listen(source, timeout=5, phrase_time_limit=5)
+        st.write("录音完成，正在识别...")
+        try:
+            text = recognizer.recognize_google(audio, language="zh-CN")
+            return text
+        except sr.UnknownValueError:
+            st.error("无法识别语音，请重试")
+        except sr.RequestError as e:
+            st.error(f"无法从Google Speech Recognition服务获取结果; {e}")
+    except Exception as e:
+        st.error(f"录音过程中出现错误: {str(e)}")
+    return None
 
 # 运行主应用
 if __name__ == "__main__":
