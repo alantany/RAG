@@ -76,6 +76,9 @@ import pandas as pd
 from serpapi import GoogleSearch
 import requests
 import io
+import speech_recognition as sr
+import streamlit.components.v1 as components
+import time
 
 # 初始化
 client = OpenAI(
@@ -133,7 +136,7 @@ def extract_keywords(text, top_k=5):
     keywords = [word for word, count in word_count.most_common(top_k*2) if len(word) > 1]
     return keywords[:top_k]
 
-# 新增函数：基于关键词搜索文档
+# 新增函数：基于关键词搜文档
 def search_documents(keywords, file_indices):
     relevant_docs = []
     for file_name, (chunks, _) in file_indices.items():
@@ -229,7 +232,7 @@ def save_index(file_name, chunks, index):
         os.makedirs('indices')
     with open(f'indices/{file_name}.pkl', 'wb') as f:
         pickle.dump((chunks, index), f)
-    # 保存文件名到一个列表中
+    # ���文件名到一个列表中
     file_list_path = 'indices/file_list.txt'
     if os.path.exists(file_list_path):
         with open(file_list_path, 'r') as f:
@@ -291,7 +294,7 @@ def main():
     if "file_indices" not in st.session_state:
         st.session_state.file_indices = load_all_indices()
 
-    # 创建标签页
+    # 创标签
     tab1, tab2, tab3 = st.tabs(["RAG 问答", "网络搜索问答", "数据库查询"])
 
     with tab1:
@@ -347,14 +350,14 @@ def main():
                         st.success(f"文档 {file_name} 已删除！")
                         st.rerun()
 
-            # 添加关键词搜索功���
+            # 添加关键词搜索功
             st.subheader("关键词搜索")
             search_keywords = st.text_input("输入关键词（用空格分隔）", key="rag_search_keywords_1")
             if search_keywords:
                 keywords = search_keywords.split()
                 relevant_docs = search_documents(keywords, st.session_state.file_indices)
                 if relevant_docs:
-                    st.write("相关文档：")
+                    st.write("相文档：")
                     for doc in relevant_docs:
                         st.write(f"• {doc}")
                     # 存储相关文档到 session state
@@ -451,10 +454,8 @@ def main():
         # 初始化 session state
         if "web_messages" not in st.session_state:
             st.session_state.web_messages = []
-        if "web_prompt" not in st.session_state:
-            st.session_state.web_prompt = ""
-        if "execute_web_query" not in st.session_state:
-            st.session_state.execute_web_query = False
+        if "voice_input" not in st.session_state:
+            st.session_state.voice_input = ""
 
         # 创建一个容器来放置对话历史
         web_chat_container = st.container()
@@ -464,26 +465,58 @@ def main():
                 with st.chat_message(message["role"]):
                     st.markdown(message["content"])
 
-        # 用户输入
-        web_prompt = st.chat_input("请输入您的问题（如需搜索，请以'搜索'开头）:", key="web_chat_input")
+        # 创建一个可更新的占位符来显示语音输入状态
+        status_placeholder = st.empty()
 
-        if web_prompt:
-            st.session_state.web_messages.append({"role": "user", "content": web_prompt})
-            
-            with web_chat_container:
-                with st.chat_message("user"):
-                    st.markdown(web_prompt)
-                with st.chat_message("assistant"):
-                    with st.spinner("正在搜索并生成回答..."):
-                        try:
-                            if web_prompt.lower().startswith("搜索"):
-                                response = serpapi_search_qa(web_prompt[2:].strip())  # 去掉"搜索"前缀
-                            else:
-                                response = direct_qa(web_prompt)
-                            st.markdown(response)
-                            st.session_state.web_messages.append({"role": "assistant", "content": response})
-                        except Exception as e:
-                            st.error(f"生成回答时发生错误: {str(e)}")
+        # 创建一个按钮来触发语音输入
+        if st.button("开始语音输入"):
+            status_placeholder.text("正在准备录音...")
+            recognizer = sr.Recognizer()
+            try:
+                with sr.Microphone() as source:
+                    status_placeholder.text("正在录音...请说话（最长15秒）")
+                    recognizer.adjust_for_ambient_noise(source, duration=1)
+                    audio = recognizer.listen(source, timeout=15, phrase_time_limit=15)
+                status_placeholder.text("录音完成，正在识别...")
+                try:
+                    text = recognizer.recognize_google(audio, language="zh-CN")
+                    status_placeholder.text(f"语音输入识别成功: {text}")
+                    st.session_state.voice_input = text
+                except sr.UnknownValueError:
+                    status_placeholder.text("无法识别语音，请重试")
+                except sr.RequestError as e:
+                    status_placeholder.text(f"无法从Google Speech Recognition服务获取结果")
+            except sr.WaitTimeoutError:
+                status_placeholder.text("未检测到语音，请确保麦克风正常工作并重试")
+            except Exception as e:
+                status_placeholder.text(f"录音过程中出现错误")
+
+        # 显示语音输入结果或允许手动输入
+        user_input = st.text_input("输入您的问题（如需搜索，请以'搜索'开头）:", value=st.session_state.voice_input, key="user_input")
+
+        # 提交按钮
+        if st.button("提交"):
+            if user_input:
+                st.session_state.web_messages.append({"role": "user", "content": user_input})
+                
+                with web_chat_container:
+                    with st.chat_message("user"):
+                        st.markdown(user_input)
+                    with st.chat_message("assistant"):
+                        with st.spinner("正在搜索并生成回答..."):
+                            try:
+                                if user_input.lower().startswith("搜索"):
+                                    response = serpapi_search_qa(user_input[2:].strip())  # 去掉"搜索"前缀
+                                else:
+                                    response = direct_qa(user_input)
+                                st.markdown(response)
+                                st.session_state.web_messages.append({"role": "assistant", "content": response})
+                            except Exception as e:
+                                st.error(f"生成回答时发生错误: {str(e)}")
+                
+                # 清空输入框和语音输入
+                st.session_state.voice_input = ""
+                st.rerun()
 
     with tab3:
         st.header("自然语言数据库查询")
@@ -664,7 +697,7 @@ def get_table_info():
 def clean_sql_query(sql_query):
     # 移除可能的 Markdown 代码块标记和多余的空白字符
     sql_query = sql_query.replace('```sql', '').replace('```', '').strip()
-    return ' '.join(sql_query.split())  # 移除多余的空白字符
+    return ' '.join(sql_query.split())  # 移除余的空白字符
 
 def nl_to_sql(nl_query):
     table_info = get_table_info()
