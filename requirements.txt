@@ -10,6 +10,7 @@ click==8.1.7
 distro==1.9.0
 faiss-cpu==1.8.0.post1
 filelock==3.16.1
+Flask==3.0.3
 fsspec==2024.9.0
 gitdb==4.0.11
 GitPython==3.1.43
@@ -25,6 +26,7 @@ httplib2==0.22.0
 httpx==0.27.2
 huggingface-hub==0.25.0
 idna==3.10
+itsdangerous==2.2.0
 jieba==0.42.1
 Jinja2==3.1.4
 jiter==0.5.0
@@ -48,6 +50,7 @@ protobuf==5.28.1
 pyarrow==17.0.0
 pyasn1==0.6.1
 pyasn1_modules==0.4.1
+PyAudio==0.2.11
 pydantic==2.9.2
 pydantic_core==2.23.4
 pydeck==0.9.1
@@ -71,6 +74,7 @@ sentence-transformers==3.1.0
 six==1.16.0
 smmap==5.0.1
 sniffio==1.3.1
+SpeechRecognition==3.10.4
 streamlit==1.38.0
 sympy==1.13.2
 tenacity==8.5.0
@@ -86,3 +90,5 @@ typing_extensions==4.12.2
 tzdata==2024.1
 uritemplate==4.1.1
 urllib3==2.2.3
+Werkzeug==3.0.4
+SpeechRecognition==3.10.4

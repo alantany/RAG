@@ -232,7 +232,7 @@ def save_index(file_name, chunks, index):
         os.makedirs('indices')
     with open(f'indices/{file_name}.pkl', 'wb') as f:
         pickle.dump((chunks, index), f)
-    # 更���列表
+    # 更���表
     file_list_path = 'indices/file_list.txt'
     if os.path.exists(file_list_path):
         with open(file_list_path, 'r') as f:
@@ -306,6 +306,13 @@ def main():
     }
     .input-group .stTextInput {
         flex-grow: 1;
+    }
+    .input-label {
+        display: flex;
+        align-items: center;
+    }
+    .input-label .stButton {
+        margin-left: 5px;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -427,64 +434,13 @@ def main():
 
             # 创建一个按钮来触发语音输入
             st.markdown('<div class="input-group">', unsafe_allow_html=True)
-            prompt = st.text_input("请基于上传的文档提出问题:", value=st.session_state.voice_input, key="rag_user_input")
+            prompt = st.text_input("请基于上传的文档提出问题:", value=st.session_state.voice_input, key="rag_user_input", on_change=handle_rag_input)
             if st.button("🎤", key="rag_voice_input_button", help="点击开始语音输入"):
                 result = perform_speech_recognition()
                 if result:
                     st.session_state.voice_input = result
                     st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
-
-            # 提交按钮
-            if st.button("提交", key="rag_submit_button"):
-                if prompt:
-                    st.session_state.rag_messages.append({"role": "user", "content": prompt})
-                    
-                    if st.session_state.file_indices:
-                        with chat_container:
-                            with st.chat_message("user"):
-                                st.markdown(prompt)
-                            with st.chat_message("assistant"):
-                                with st.spinner("正在生成回答..."):
-                                    try:
-                                        # 使用保存的相关文档（如果有的话）
-                                        relevant_docs = st.session_state.get('relevant_docs')
-                                        response, sources, relevant_excerpt = rag_qa(prompt, st.session_state.file_indices, relevant_docs)
-                                        st.markdown(response)
-                                        if sources:
-                                            st.markdown("**参考来源：**")
-                                            file_name, _ = sources[0]
-                                            st.markdown(f"**文件：** {file_name}")
-                                            if os.path.exists(f'indices/{file_name}.pkl'):
-                                                with open(f'indices/{file_name}.pkl', 'rb') as f:
-                                                    file_content = pickle.load(f)[0]  # 获取件内容
-                                                st.download_button(
-                                                    label="下载源文件",
-                                                    data='\n'.join(file_content),
-                                                    file_name=file_name,
-                                                    mime='text/plain',
-                                                    key=f"download_new_{len(st.session_state.rag_messages)}"
-                                                )
-                                        if relevant_excerpt:
-                                            st.markdown(f"**相关原文：** <mark>{relevant_excerpt}</mark>", unsafe_allow_html=True)
-                                        else:
-                                            st.warning("未能提取到精确的相关原文，但找到相关信息。")
-                                    except Exception as e:
-                                        st.error(f"生成回答时发生错误: {str(e)}")
-                        st.session_state.rag_messages.append({
-                            "role": "assistant", 
-                            "content": response, 
-                            "sources": sources,
-                            "relevant_excerpt": relevant_excerpt
-                        })
-                    else:
-                        with chat_container:
-                            with st.chat_message("assistant"):
-                                st.warning("请先上传文档。")
-                    
-                    # 清空语音输入
-                    st.session_state.voice_input = ""
-                    st.rerun()
 
     with tab2:
         st.header("网络搜索问答")
@@ -508,37 +464,13 @@ def main():
 
         # 创建一个按钮来触发语音输入
         st.markdown('<div class="input-group">', unsafe_allow_html=True)
-        user_input = st.text_input("输入您的问题（如需搜索，请以'搜索'开头）:", value=st.session_state.voice_input, key="web_user_input")
+        user_input = st.text_input("输入您的问题（如需搜索，请以'搜索'开头）:", value=st.session_state.voice_input, key="web_user_input", on_change=handle_web_input)
         if st.button("🎤", key="web_voice_input_button", help="点击开始语音输入"):
             result = perform_speech_recognition()
             if result:
                 st.session_state.voice_input = result
                 st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
-
-        # 提交按钮
-        if st.button("提交", key="web_submit_button"):
-            if user_input:
-                st.session_state.web_messages.append({"role": "user", "content": user_input})
-                
-                with web_chat_container:
-                    with st.chat_message("user"):
-                        st.markdown(user_input)
-                    with st.chat_message("assistant"):
-                        with st.spinner("正在搜索并生成回答..."):
-                            try:
-                                if user_input.lower().startswith("搜索"):
-                                    response = serpapi_search_qa(user_input[2:].strip())  # 去掉"搜索"前缀
-                                else:
-                                    response = direct_qa(user_input)
-                                st.markdown(response)
-                                st.session_state.web_messages.append({"role": "assistant", "content": response})
-                            except Exception as e:
-                                st.error(f"生成回答时发生错误: {str(e)}")
-                
-                # 清空输入框和语音输入
-                st.session_state.voice_input = ""
-                st.rerun()
 
     with tab3:
         st.header("自然语言数据库查询")
@@ -578,47 +510,13 @@ def main():
 
         # 创建一个按钮来触发语音输入
         st.markdown('<div class="input-group">', unsafe_allow_html=True)
-        nl_query = st.text_input("输入您的自然语言查询:", value=st.session_state.voice_input, key="db_user_input")
+        nl_query = st.text_input("输入您的自然语言查询:", value=st.session_state.voice_input, key="db_user_input", on_change=handle_db_input)
         if st.button("🎤", key="db_voice_input_button", help="点击开始语音输入"):
             result = perform_speech_recognition()
             if result:
                 st.session_state.voice_input = result
                 st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
-
-        # 提交按钮
-        if st.button("提交查询", key="db_submit_button"):
-            if nl_query:
-                st.session_state.db_messages.append({"role": "user", "content": nl_query})
-                
-                with db_chat_container:
-                    with st.chat_message("user"):
-                        st.markdown(nl_query)
-                    with st.chat_message("assistant"):
-                        with st.spinner("正在生成SQL并执行查询..."):
-                            try:
-                                sql_query = nl_to_sql(nl_query)
-                                st.session_state.sql_query = sql_query
-                                
-                                results, column_names = execute_sql(sql_query)
-                                if isinstance(results, str):
-                                    st.error(results)
-                                else:
-                                    df = pd.DataFrame(results, columns=column_names)
-                                    st.session_state.query_result = df
-
-                                    # 生成自然语言解释
-                                    explanation = generate_explanation(nl_query, sql_query, df)
-                                    st.session_state.query_explanation = explanation
-                                
-                                response = f"SQL查询:\n```sql\n{sql_query}\n```\n\n查询结果:\n{df.to_markdown()}\n\n解释:\n{explanation}"
-                                st.session_state.db_messages.append({"role": "assistant", "content": response})
-                            except Exception as e:
-                                st.error(f"查询执行错误: {str(e)}")
-                
-                # 清空语音输入
-                st.session_state.voice_input = ""
-                st.rerun()
 
         # 显示存储的查询结果（如果有）
         if st.session_state.sql_query:
@@ -832,6 +730,67 @@ def perform_speech_recognition():
     except Exception as e:
         st.error(f"录音过程中出现错误: {str(e)}")
     return None
+
+def handle_rag_input():
+    prompt = st.session_state.rag_user_input
+    if prompt:
+        st.session_state.rag_messages.append({"role": "user", "content": prompt})
+        if st.session_state.file_indices:
+            with st.spinner("正在生成回答..."):
+                try:
+                    relevant_docs = st.session_state.get('relevant_docs')
+                    response, sources, relevant_excerpt = rag_qa(prompt, st.session_state.file_indices, relevant_docs)
+                    st.session_state.rag_messages.append({
+                        "role": "assistant", 
+                        "content": response, 
+                        "sources": sources,
+                        "relevant_excerpt": relevant_excerpt
+                    })
+                except Exception as e:
+                    st.error(f"生成回答时发生错误: {str(e)}")
+        else:
+            st.warning("请先上传文档。")
+        st.session_state.voice_input = ""
+        st.rerun()
+
+def handle_web_input():
+    user_input = st.session_state.web_user_input
+    if user_input:
+        st.session_state.web_messages.append({"role": "user", "content": user_input})
+        with st.spinner("正在搜索并生成回答..."):
+            try:
+                if user_input.lower().startswith("搜索"):
+                    response = serpapi_search_qa(user_input[2:].strip())
+                else:
+                    response = direct_qa(user_input)
+                st.session_state.web_messages.append({"role": "assistant", "content": response})
+            except Exception as e:
+                st.error(f"生成回答时发生错误: {str(e)}")
+        st.session_state.voice_input = ""
+        st.rerun()
+
+def handle_db_input():
+    nl_query = st.session_state.db_user_input
+    if nl_query:
+        st.session_state.db_messages.append({"role": "user", "content": nl_query})
+        with st.spinner("正在生成SQL并执行查询..."):
+            try:
+                sql_query = nl_to_sql(nl_query)
+                st.session_state.sql_query = sql_query
+                results, column_names = execute_sql(sql_query)
+                if isinstance(results, str):
+                    st.error(results)
+                else:
+                    df = pd.DataFrame(results, columns=column_names)
+                    st.session_state.query_result = df
+                    explanation = generate_explanation(nl_query, sql_query, df)
+                    st.session_state.query_explanation = explanation
+                    response = f"SQL查询:\n```sql\n{sql_query}\n```\n\n查询结果:\n{df.to_markdown()}\n\n解释:\n{explanation}"
+                    st.session_state.db_messages.append({"role": "assistant", "content": response})
+            except Exception as e:
+                st.error(f"查询执行错误: {str(e)}")
+        st.session_state.voice_input = ""
+        st.rerun()
 
 # 运行主应用
 if __name__ == "__main__":
