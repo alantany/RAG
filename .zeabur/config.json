@@ -1,0 +1,10 @@
+{
+  "build": {
+    "env": {
+      "PYTHON_VERSION": "3.11"
+    }
+  },
+  "run": {
+    "command": "streamlit run app.py"
+  }
+}
