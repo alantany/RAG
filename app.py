@@ -297,153 +297,120 @@ def main():
     with tab1:
         st.header("RAG 问答")
 
-        # 添加CSS样式
-        st.markdown("""
-        <style>
-        .stColumn {
-            padding: 10px;
-        }
-        .divider {
-            border-left: 2px solid #bbb;
-            height: 100vh;
-            position: absolute;
-            left: 50%;
-            margin-left: -1px;
-            top: 0;
-        }
-        </style>
-        """, unsafe_allow_html=True)
+        # 文档上传部分
+        st.subheader("文档上传")
+        
+        max_tokens = 4096
 
-        # 创建左右两列布局
-        left_column, divider, right_column = st.columns([2, 0.1, 3])
+        uploaded_files = st.file_uploader("上传文档", type=["pdf", "docx", "txt"], accept_multiple_files=True, key="rag_file_uploader_1")
 
-        with left_column:
-            st.header("文档上传")
-            
-            # 设置最大token数
-            max_tokens = 4096
+        if uploaded_files:
+            for uploaded_file in uploaded_files:
+                with st.spinner(f"正在处理文档: {uploaded_file.name}..."):
+                    chunks, index = vectorize_document(uploaded_file, max_tokens)
+                    st.session_state.file_indices[uploaded_file.name] = (chunks, index)
+                    save_index(uploaded_file.name, chunks, index)
+                st.success(f"文档 {uploaded_file.name} 已向量化并添加到索引中！")
 
-            # 多文件上传 (添加唯一key)
-            uploaded_files = st.file_uploader("上传文档", type=["pdf", "docx", "txt"], accept_multiple_files=True, key="rag_file_uploader_1")
-
-            if uploaded_files:
-                for uploaded_file in uploaded_files:
-                    with st.spinner(f"正在处理文档: {uploaded_file.name}..."):
-                        chunks, index = vectorize_document(uploaded_file, max_tokens)
-                        st.session_state.file_indices[uploaded_file.name] = (chunks, index)
-                        save_index(uploaded_file.name, chunks, index)
-                    st.success(f"文档 {uploaded_file.name} 已向量化并添加到索引中！")
-
-            # 显示已处理的文件并添加删除按钮
-            st.subheader("已处理文档:")
-            for file_name in list(st.session_state.file_indices.keys()):
-                col1, col2 = st.columns([3, 1])
-                with col1:
-                    st.write(f"• {file_name}")
-                with col2:
-                    if st.button("删除", key=f"delete_{file_name}"):
-                        del st.session_state.file_indices[file_name]
-                        delete_index(file_name)
-                        st.success(f"文档 {file_name} 已删除！")
-                        st.rerun()
-
-            # 添加关键词搜索功���
-            st.subheader("关键词搜索")
-            search_keywords = st.text_input("输入关键词（用空格分隔）", key="rag_search_keywords_1")
-            if search_keywords:
-                keywords = search_keywords.split()
-                relevant_docs = search_documents(keywords, st.session_state.file_indices)
-                if relevant_docs:
-                    st.write("相关文档：")
-                    for doc in relevant_docs:
-                        st.write(f"• {doc}")
-                    # 存储相关文档到 session state
-                    st.session_state.relevant_docs = relevant_docs
-                else:
-                    st.write("没有找到相关文档。")
-                    st.session_state.relevant_docs = None
-
-        # 添加垂直分割线
-        with divider:
-            st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
-
-        with right_column:
-            # 创建一个容器来放置对话历史
-            chat_container = st.container()
-
-            # 显示对话历史
-            with chat_container:
-                for i, message in enumerate(st.session_state.rag_messages):
-                    with st.chat_message(message["role"]):
-                        st.markdown(message["content"])
-                        if "sources" in message and message["sources"]:
-                            st.markdown("**参考来源：**")
-                            file_name, _ = message["sources"][0]
-                            st.markdown(f"**文件：** {file_name}")
-                            if os.path.exists(f'indices/{file_name}.pkl'):
-                                with open(f'indices/{file_name}.pkl', 'rb') as f:
-                                    file_content = pickle.load(f)[0]  # 获取文件内容
-                                st.download_button(
-                                    label="下载源文件",
-                                    data='\n'.join(file_content),
-                                    file_name=file_name,
-                                    mime='text/plain',
-                                    key=f"download_{i}"
-                                )
-                        if "relevant_excerpt" in message:
-                            st.markdown(f"**相关原文：** <mark>{message['relevant_excerpt']}</mark>", unsafe_allow_html=True)
-
-            # 创建一个列布局来放置输入框和清除对话按钮
+        # 显示已处理的文件并添加删除按钮
+        st.subheader("已处理文档:")
+        for file_name in list(st.session_state.file_indices.keys()):
             col1, col2 = st.columns([3, 1])
-
-            # 用户输入
             with col1:
-                prompt = st.chat_input("请基于上传的文档提出问题:", key="rag_chat_input_1")
+                st.write(f"• {file_name}")
+            with col2:
+                if st.button("删除", key=f"delete_{file_name}"):
+                    del st.session_state.file_indices[file_name]
+                    delete_index(file_name)
+                    st.success(f"文档 {file_name} 已删除！")
+                    st.rerun()
 
-            if prompt:
-                st.session_state.rag_messages.append({"role": "user", "content": prompt})
-                
-                if st.session_state.file_indices:
-                    with chat_container:
-                        with st.chat_message("user"):
-                            st.markdown(prompt)
-                        with st.chat_message("assistant"):
-                            with st.spinner("正在生成回答..."):
-                                try:
-                                    # 使用保存的相关文档（如果有的话）
-                                    relevant_docs = st.session_state.get('relevant_docs')
-                                    response, sources, relevant_excerpt = rag_qa(prompt, st.session_state.file_indices, relevant_docs)
-                                    st.markdown(response)
-                                    if sources:
-                                        st.markdown("**参考来源：**")
-                                        file_name, _ = sources[0]
-                                        st.markdown(f"**文件：** {file_name}")
-                                        if os.path.exists(f'indices/{file_name}.pkl'):
-                                            with open(f'indices/{file_name}.pkl', 'rb') as f:
-                                                file_content = pickle.load(f)[0]  # 获取文件内容
-                                            st.download_button(
-                                                label="下载源文件",
-                                                data='\n'.join(file_content),
-                                                file_name=file_name,
-                                                mime='text/plain',
-                                                key=f"download_new_{len(st.session_state.rag_messages)}"
-                                            )
-                                    if relevant_excerpt:
-                                        st.markdown(f"**相关原文：** <mark>{relevant_excerpt}</mark>", unsafe_allow_html=True)
-                                    else:
-                                        st.warning("未能提取到精确的相关原文，但找到相关信息。")
-                                except Exception as e:
-                                    st.error(f"生成回答时发生错误: {str(e)}")
-                    st.session_state.rag_messages.append({
-                        "role": "assistant", 
-                        "content": response, 
-                        "sources": sources,
-                        "relevant_excerpt": relevant_excerpt
-                    })
-                else:
-                    with chat_container:
-                        with st.chat_message("assistant"):
-                            st.warning("请先上传文档。")
+        # 添加关键词搜索功能
+        st.subheader("关键词搜索")
+        search_keywords = st.text_input("输入关键词（用空格分隔）", key="rag_search_keywords_1")
+        if search_keywords:
+            keywords = search_keywords.split()
+            relevant_docs = search_documents(keywords, st.session_state.file_indices)
+            if relevant_docs:
+                st.write("相关文档：")
+                for doc in relevant_docs:
+                    st.write(f"• {doc}")
+                st.session_state.relevant_docs = relevant_docs
+            else:
+                st.write("没有找到相关文档。")
+                st.session_state.relevant_docs = None
+
+        # 对话部分
+        st.subheader("对话")
+        chat_container = st.container()
+
+        with chat_container:
+            for i, message in enumerate(st.session_state.rag_messages):
+                with st.chat_message(message["role"]):
+                    st.markdown(message["content"])
+                    if "sources" in message and message["sources"]:
+                        st.markdown("**参考来源：**")
+                        file_name, _ = message["sources"][0]
+                        st.markdown(f"**文件：** {file_name}")
+                        if os.path.exists(f'indices/{file_name}.pkl'):
+                            with open(f'indices/{file_name}.pkl', 'rb') as f:
+                                file_content = pickle.load(f)[0]  # 获取文件内容
+                            st.download_button(
+                                label="下载源文件",
+                                data='\n'.join(file_content),
+                                file_name=file_name,
+                                mime='text/plain',
+                                key=f"download_{i}"
+                            )
+                    if "relevant_excerpt" in message:
+                        st.markdown(f"**相关原文：** <mark>{message['relevant_excerpt']}</mark>", unsafe_allow_html=True)
+
+        # 用户输入
+        prompt = st.chat_input("请基于上传的文档提出问题:", key="rag_chat_input_1")
+
+        if prompt:
+            st.session_state.rag_messages.append({"role": "user", "content": prompt})
+            
+            if st.session_state.file_indices:
+                with chat_container:
+                    with st.chat_message("user"):
+                        st.markdown(prompt)
+                    with st.chat_message("assistant"):
+                        with st.spinner("正在生成回答..."):
+                            try:
+                                relevant_docs = st.session_state.get('relevant_docs')
+                                response, sources, relevant_excerpt = rag_qa(prompt, st.session_state.file_indices, relevant_docs)
+                                st.markdown(response)
+                                if sources:
+                                    st.markdown("**参考来源：**")
+                                    file_name, _ = sources[0]
+                                    st.markdown(f"**文件：** {file_name}")
+                                    if os.path.exists(f'indices/{file_name}.pkl'):
+                                        with open(f'indices/{file_name}.pkl', 'rb') as f:
+                                            file_content = pickle.load(f)[0]  # 获取文件内容
+                                        st.download_button(
+                                            label="下载源文件",
+                                            data='\n'.join(file_content),
+                                            file_name=file_name,
+                                            mime='text/plain',
+                                            key=f"download_new_{len(st.session_state.rag_messages)}"
+                                        )
+                                if relevant_excerpt:
+                                    st.markdown(f"**相关原文：** <mark>{relevant_excerpt}</mark>", unsafe_allow_html=True)
+                                else:
+                                    st.warning("未能提取到精确的相关原文，但找到相关信息。")
+                            except Exception as e:
+                                st.error(f"生成回答时发生错误: {str(e)}")
+                st.session_state.rag_messages.append({
+                    "role": "assistant", 
+                    "content": response, 
+                    "sources": sources,
+                    "relevant_excerpt": relevant_excerpt
+                })
+            else:
+                with chat_container:
+                    with st.chat_message("assistant"):
+                        st.warning("请先上传文档。")
 
     with tab2:
         st.header("网络搜索问答")
