@@ -80,7 +80,8 @@ import requests
 import io
 from sqlalchemy import create_engine, inspect
 import plotly.express as px
-import graphviz
+from pyvis.network import Network
+import streamlit.components.v1 as components
 
 # 初始化
 client = OpenAI(
@@ -297,7 +298,7 @@ def main():
         st.session_state.file_indices = load_all_indices()
 
     # 创建签页
-    tab1, tab2, tab3, tab4 = st.tabs(["RAG知识问答", "网络搜索问答", "数据库查询", "AI数据分析"])
+    tab1, tab2, tab3 = st.tabs(["RAG知识问答", "网络搜索问答", "AI数据分析"])
 
     with tab1:
         st.header("RAG 问答")
@@ -457,97 +458,8 @@ def main():
                         except Exception as e:
                             st.error(f"生成回答时发生错误: {str(e)}")
 
+
     with tab3:
-        st.header("数据库查询")
-
-        # 检查数据库文件是否存在
-        if not os.path.exists('chinook.db'):
-            st.warning("数据库文件不存在，正在尝试下载...")
-            with st.spinner("正在下载并创建数据库..."):
-                download_and_create_database()
-            if os.path.exists('chinook.db'):
-                st.success("数据库文件已成功下载！")
-            else:
-                st.error("无法创建数据库文件。请检查网络连接和文件权限。")
-
-        # 初始化 session state
-        if "db_messages" not in st.session_state:
-            st.session_state.db_messages = []
-
-        # 创建一个容器来放置对话历史
-        db_chat_container = st.container()
-
-        with db_chat_container:
-            for message in st.session_state.db_messages:
-                with st.chat_message(message["role"]):
-                    st.markdown(message["content"])
-
-        # 用户输入
-        nl_query = st.chat_input("请输入您的自然语言查询:", key="db_chat_input")
-
-        if nl_query:
-            st.session_state.db_messages.append({"role": "user", "content": nl_query})
-            
-            with db_chat_container:
-                with st.chat_message("user"):
-                    st.markdown(nl_query)
-                with st.chat_message("assistant"):
-                    with st.spinner("正在生成SQL并执行查询..."):
-                        try:
-                            sql_query = nl_to_sql(nl_query)
-                            st.code(sql_query, language="sql")
-                            
-                            results, column_names = execute_sql(sql_query)
-                            if isinstance(results, str):
-                                st.error(results)
-                            else:
-                                df = pd.DataFrame(results, columns=column_names)
-                                st.dataframe(df)
-
-                                # 生成自然语言解释
-                                explanation = generate_explanation(nl_query, sql_query, df)
-                                st.markdown(explanation, unsafe_allow_html=True)
-                            
-                            response = f"SQL查询:\n```sql\n{sql_query}\n```\n\n解释:\n{explanation}"
-                            st.session_state.db_messages.append({"role": "assistant", "content": response})
-                        except Exception as e:
-                            st.error(f"查询执行错误: {str(e)}")
-
-        # 数据库信息显示部分保持不变
-        if 'show_db_info' not in st.session_state:
-            st.session_state.show_db_info = False
-        if 'selected_table' not in st.session_state:
-            st.session_state.selected_table = None
-
-        if st.button("显示/隐藏数据库信息"):
-            st.session_state.show_db_info = not st.session_state.show_db_info
-            st.session_state.selected_table = None  # 重置选中的表
-
-        if st.session_state.show_db_info:
-            table_info = get_table_info()
-            if not table_info:
-                st.error("无法获取数据库息。请检查数据库连接。")
-            else:
-                st.success(f"成功获取到 {len(table_info)} 个表的信息")
-                
-                # 创建一个动态的列布局来横向排列表名
-                cols = st.columns(4)  # 每行4个表名
-                for i, table in enumerate(table_info.keys()):
-                    with cols[i % 4]:
-                        if st.button(table, key=f"table_{table}"):
-                            st.session_state.selected_table = table
-
-        # 在表名下方显示查询结果
-        if st.session_state.selected_table:
-            st.subheader(f"表名: {st.session_state.selected_table}")
-            results, column_names = execute_sql(f"SELECT * FROM {st.session_state.selected_table} LIMIT 10")
-            if isinstance(results, str):
-                st.error(results)
-            else:
-                df = pd.DataFrame(results, columns=column_names)
-                st.dataframe(df)
-
-    with tab4:
         st.header("AI数据分析")
         
         def load_data():
@@ -674,8 +586,7 @@ def main():
             return relationships
 
         def generate_relationship_graph(relationships):
-            dot = graphviz.Digraph(comment='Database Relationships')
-            dot.attr(rankdir='LR', size='8,5')
+            net = Network(notebook=True, height="500px", width="100%", bgcolor="#ffffff", font_color="black")
             
             # 添加节点（表）
             tables = set()
@@ -684,15 +595,57 @@ def main():
                 tables.add(rel['to_table'])
             
             for table in tables:
-                dot.node(table, table)
+                net.add_node(table, label=table, title=table, shape="box")
             
             # 添加边（关系）
             for rel in relationships:
-                dot.edge(rel['from_table'], rel['to_table'], 
-                         label=f"{rel['from_column']} -> {rel['to_column']}")
+                edge_label = f"{rel['from_column']} -> {rel['to_column']}"
+                net.add_edge(rel['from_table'], rel['to_table'], 
+                             title=edge_label, label=edge_label, arrows='to')
             
-            # 返回图的DOT语言表示
-            return dot.source
+            # 配置网络图的物理布局
+            net.set_options("""
+            var options = {
+                "physics": {
+                    "forceAtlas2Based": {
+                        "gravitationalConstant": -50,
+                        "centralGravity": 0.01,
+                        "springLength": 200,
+                        "springConstant": 0.08
+                    },
+                    "maxVelocity": 50,
+                    "solver": "forceAtlas2Based",
+                    "timestep": 0.35,
+                    "stabilization": {"iterations": 150}
+                },
+                "edges": {
+                    "font": {
+                        "size": 12,
+                        "align": "middle"
+                    },
+                    "smooth": {
+                        "type": "continuous",
+                        "forceDirection": "none"
+                    }
+                },
+                "nodes": {
+                    "font": {
+                        "size": 16,
+                        "face": "Tahoma"
+                    },
+                    "shape": "box"
+                }
+            }
+            """)
+            
+            # 生成HTML文件
+            net.save_graph("temp_graph.html")
+            
+            # 读取生成的HTML文件内容
+            with open("temp_graph.html", "r", encoding="utf-8") as f:
+                html_string = f.read()
+            
+            return html_string
 
         # 加载数据
         df, conn, data_source = load_data()
@@ -791,8 +744,8 @@ def main():
                 if conn:
                     relationships = get_table_relationships(conn)
                     if relationships:
-                        html = generate_relationship_graph(relationships)
-                        st.components.v1.html(html, height=750, scrolling=True)
+                        html_string = generate_relationship_graph(relationships)
+                        components.html(html_string, height=600, scrolling=True)
                     else:
                         st.info("未找到表之间的关系。")
                     conn.close()
