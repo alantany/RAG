@@ -80,6 +80,7 @@ import requests
 import io
 from sqlalchemy import create_engine, inspect
 import plotly.express as px
+import graphviz
 
 # 初始化
 client = OpenAI(
@@ -295,8 +296,8 @@ def main():
     if "file_indices" not in st.session_state:
         st.session_state.file_indices = load_all_indices()
 
-    # 创建��签页
-    tab1, tab2, tab3, tab4 = st.tabs(["RAG 问答", "网络搜索问答", "数据库查询", "AI数据分析"])
+    # 创建签页
+    tab1, tab2, tab3, tab4 = st.tabs(["RAG知识问答", "网络搜索问答", "数据库查询", "AI数据分析"])
 
     with tab1:
         st.header("RAG 问答")
@@ -549,7 +550,6 @@ def main():
     with tab4:
         st.header("AI数据分析")
         
-        # 从 ai-chart.py 复制并适当修改的代码
         def load_data():
             data_source = st.radio("选择数据源", ["Excel文件", "RDBMS数据库"])
             
@@ -634,6 +634,65 @@ def main():
             result = pd.read_sql_query(sql_query, engine)
             
             return result
+
+        def connect_to_database():
+            try:
+                conn = sqlite3.connect('chinook.db')
+                return conn
+            except sqlite3.Error as e:
+                st.error(f"连接数据库时出错: {e}")
+                return None
+
+        def get_table_relationships(conn):
+            cursor = conn.cursor()
+            
+            # 获取所有表名
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
+            tables = cursor.fetchall()
+            
+            relationships = []
+            
+            for table in tables:
+                table_name = table[0]
+                # 获取表的外键信息
+                cursor.execute(f"PRAGMA foreign_key_list({table_name})")
+                foreign_keys = cursor.fetchall()
+                
+                for fk in foreign_keys:
+                    from_table = table_name
+                    to_table = fk[2]  # 引用的表名
+                    from_column = fk[3]  # 外键列名
+                    to_column = fk[4]  # 引用的列名
+                    
+                    relationships.append({
+                        'from_table': from_table,
+                        'to_table': to_table,
+                        'from_column': from_column,
+                        'to_column': to_column
+                    })
+            
+            return relationships
+
+        def generate_relationship_graph(relationships):
+            dot = graphviz.Digraph(comment='Database Relationships')
+            dot.attr(rankdir='LR', size='8,5')
+            
+            # 添加节点（表）
+            tables = set()
+            for rel in relationships:
+                tables.add(rel['from_table'])
+                tables.add(rel['to_table'])
+            
+            for table in tables:
+                dot.node(table, table)
+            
+            # 添加边（关系）
+            for rel in relationships:
+                dot.edge(rel['from_table'], rel['to_table'], 
+                         label=f"{rel['from_column']} -> {rel['to_column']}")
+            
+            # 返回图的DOT语言表示
+            return dot.source
 
         # 加载数据
         df, conn, data_source = load_data()
