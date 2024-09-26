@@ -12,7 +12,7 @@ AI知识问答系统安装文档
 3. 安装依赖：
    pip install -r requirements.txt
 
-4. requirements.txt 文件内容：
+4. requirements.txt文件内容：
    streamlit
    openai
    sentence-transformers
