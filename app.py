@@ -43,12 +43,15 @@ import os
 
 # 设置页面配置必须是第一个 Streamlit 命令
 st.set_page_config(
-    page_title="AI知识问答系统",
+    page_title="AI知识问答系统 - by Huaiyuan Tan",
     page_icon="🧠",
     layout="wide",
     initial_sidebar_state="collapsed",
     menu_items=None
 )
+
+# 添加开发者信息
+st.markdown("<h6 style='text-align: right; color: gray;'>开发者: Huaiyuan Tan</h6>", unsafe_allow_html=True)
 
 # 隐藏 Streamlit 默认的菜单、页脚和 Deploy 按钮
 hide_streamlit_style = """
