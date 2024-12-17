@@ -78,7 +78,6 @@ import jieba
 from collections import Counter
 import sqlite3
 import pandas as pd
-from serpapi import GoogleSearch
 import requests
 import io
 from sqlalchemy import create_engine, inspect
@@ -86,22 +85,26 @@ import plotly.express as px
 from pyvis.network import Network
 import streamlit.components.v1 as components
 
-# 初始化
+# 修改初始化部分
 client = OpenAI(
     api_key="sk-2D0EZSwcWUcD4c2K59353b7214854bBd8f35Ac131564EfBa",
-    base_url="https://free.gpt.ge/v1"
+    base_url="https://free.gpt.ge/v1",
+    http_client=None,
+    default_headers=None,
+    default_query=None,
+    timeout=None,
 )
 
 # 在初始化 client 后添加测试代码
 try:
     response = client.chat.completions.create(
-        model="gpt-4o-mini",
+        model="gpt-3.5-turbo",  # 改回 gpt-3.5-turbo
         messages=[
             {"role": "system", "content": "请告诉我你的模型名称"},
             {"role": "user", "content": "你是什么模型？"}
         ]
     )
-    st.write("当前使用的模型：", response.model)  # 显示实际使用的模型
+    st.write("当前使用的模型：", response.model)
     st.write("模型响应：", response.choices[0].message.content)
 except Exception as e:
     st.error(f"模型测试出错: {str(e)}")
@@ -333,7 +336,7 @@ def main():
                     chunks, index = vectorize_document(uploaded_file, max_tokens)
                     st.session_state.file_indices[uploaded_file.name] = (chunks, index)
                     save_index(uploaded_file.name, chunks, index)
-                st.success(f"文档 {uploaded_file.name} ��向量化并添加到索��中！")
+                st.success(f"文档 {uploaded_file.name} 向量化并添加到索引中！")
 
         # 显示已处理的文件并添加删除按钮
         st.subheader("已处理文档:")
@@ -422,14 +425,16 @@ def main():
                                     st.markdown(f"**相关原文：** <mark>{relevant_excerpt}</mark>", unsafe_allow_html=True)
                                 else:
                                     st.warning("未能提取到精确的相关原文，但找到相关信息。")
+                                
+                                # 只有在成功生成回答后才添加到消息历史
+                                st.session_state.rag_messages.append({
+                                    "role": "assistant", 
+                                    "content": response, 
+                                    "sources": sources,
+                                    "relevant_excerpt": relevant_excerpt
+                                })
                             except Exception as e:
                                 st.error(f"生成回答时发生错误: {str(e)}")
-                st.session_state.rag_messages.append({
-                    "role": "assistant", 
-                    "content": response, 
-                    "sources": sources,
-                    "relevant_excerpt": relevant_excerpt
-                })
             else:
                 with chat_container:
                     with st.chat_message("assistant"):
@@ -531,7 +536,7 @@ def main():
             """
             
             response = client.chat.completions.create(
-                model="gpt-4o-mini",
+                model="gpt-3.5-turbo",
                 messages=[
                     {"role": "system", "content": "你是一个SQL专家，能够将自然语言查询转换为SQL语句。请用中文回答。"},
                     {"role": "user", "content": prompt}
@@ -769,7 +774,7 @@ def main():
 
 def direct_qa(query):
     response = client.chat.completions.create(
-        model="gpt-4o-mini",
+        model="gpt-3.5-turbo",
         messages=[
             {"role": "system", "content": "你是一个有帮助的助手，能够回答各种问题。请用中文回答。"},
             {"role": "user", "content": query}
@@ -778,37 +783,45 @@ def direct_qa(query):
     return response.choices[0].message.content.strip()
 
 def serpapi_search_qa(query, num_results=3):
+    # 直接使用 requests 调用 SerpAPI
+    url = "https://serpapi.com/search"
     params = {
         "engine": "google",
         "q": query,
         "api_key": "04fec5e75c6f477225ce29bc358f4cc7088945d0775e7f75721cd85b36387125",
         "num": num_results
     }
-    search = GoogleSearch(params)
-    results = search.get_dict()
-    organic_results = results.get("organic_results", [])
     
-    if not organic_results:
-        return "没有找到相关结果。"
-    
-    snippets = [result.get("snippet", "") for result in organic_results]
-    links = [result.get("link", "") for result in organic_results]
-    
-    search_results = "\n".join([f"{i+1}. {snippet} ({link})" for i, (snippet, link) in enumerate(zip(snippets, links))])
-    prompt = f"""问题: {query}
-搜索结果:
-{search_results}
+    try:
+        response = requests.get(url, params=params)
+        response.raise_for_status()
+        results = response.json()
+        
+        organic_results = results.get("organic_results", [])
+        
+        if not organic_results:
+            return "没有找到相关结果。"
+        
+        snippets = [result.get("snippet", "") for result in organic_results]
+        links = [result.get("link", "") for result in organic_results]
+        
+        search_results = "\n".join([f"{i+1}. {snippet} ({link})" for i, (snippet, link) in enumerate(zip(snippets, links))])
+        prompt = f"""问题: {query}
+    搜索结果:
+    {search_results}
 
-请根据上述搜索结果回答问题。如果搜索结果不足以回答问题，请说"根据搜索结果无法回答问题"。"""
+    请根据上述搜索结果回答问题。如果搜索结果不足以回答问题，请说"根据搜索结果无法回答问题"。"""
 
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[
-            {"role": "system", "content": "你是一个有帮助的助手，能够根据搜索结果回答问题。"},
-            {"role": "user", "content": prompt}
-        ]
-    )
-    return response.choices[0].message.content.strip()
+        response = client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": "你是一个有帮助的助手，能够根据搜索结果回答问题。"},
+                {"role": "user", "content": prompt}
+            ]
+        )
+        return response.choices[0].message.content.strip()
+    except Exception as e:
+        return f"搜索过程中发生错误: {str(e)}"
 
 def download_and_create_database():
     url = "https://raw.githubusercontent.com/lerocha/chinook-database/master/ChinookDatabase/DataSources/Chinook_Sqlite.sqlite"
@@ -863,7 +876,7 @@ def nl_to_sql(nl_query):
     table_descriptions = "\n".join([f"表名: {table}\n字段: {', '.join(columns)}" for table, columns in table_info.items()])
     
     response = client.chat.completions.create(
-        model="gpt-4o-mini",
+        model="gpt-3.5-turbo",
         messages=[
             {"role": "system", "content": f"你是一个SQL专家，够将自然语言查询转换为SQL语句。数据库包含以下表和字段：\n\n{table_descriptions}"},
             {"role": "user", "content": f"将以下自然语言查询转换为SQL语句：\n{nl_query}\n只返回SQL语句，不要有其他解释。"}
@@ -902,7 +915,7 @@ def generate_explanation(nl_query, sql_query, df):
     )
 
     response = client.chat.completions.create(
-        model="gpt-4o-mini",
+        model="gpt-3.5-turbo",
         messages=[
             {"role": "system", "content": "你是一个数据分析专家，擅长解释SQL查询结果。"},
             {"role": "user", "content": prompt}
