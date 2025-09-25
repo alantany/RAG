@@ -13,3 +13,4 @@ requests
 jieba
 openpyxl
 setuptools>=65.5.1
+python-dotenv

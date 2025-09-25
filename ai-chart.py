@@ -10,14 +10,18 @@ import plotly.express as px
 import plotly.graph_objects as go
 import os
 from pyvis.network import Network
+from dotenv import load_dotenv
+
+# 加载环境变量
+load_dotenv()
 
 # 设置页面标题
 st.set_page_config(page_title="基于AI的数据分析", layout="wide")
 
 # 初始化 OpenAI 客户端
 client = OpenAI(
-    api_key="sk-1pUmQlsIkgla3CuvKTgCrzDZ3r0pBxO608YJvIHCN18lvOrn",
-    base_url="https://api.chatanywhere.tech/v1"
+    api_key=os.getenv("OPENAI_API_KEY"),
+    base_url=os.getenv("OPENAI_BASE_URL")
 )
 
 # 主页面标题
@@ -36,7 +40,7 @@ def nl_to_sql(nl_query, table_info):
     """
     
     response = client.chat.completions.create(
-        model="gpt-3.5-turbo",
+        model=os.getenv("OPENAI_MODEL", "deepseek/deepseek-chat-v3.1:free"),
         messages=[
             {"role": "system", "content": "你是一个SQL专家，能够将自然语言查询转换为SQL语句。请用中文回答。"},
             {"role": "user", "content": prompt}

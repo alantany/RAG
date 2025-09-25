@@ -12,34 +12,29 @@ AI知识问答系统安装文档
 3. 安装依赖：
    pip install -r requirements.txt
 
-4. requirements.txt 文件内容：
-   streamlit
-   openai
-   sentence-transformers
-   PyPDF2
-   python-docx
-   faiss-cpu
-   tiktoken
-   serpapi
-   pandas
-   sqlite3  # 通常已包含在Python标准库中
+4. 环境变量配置：
+   创建.env文件或在Streamlit Cloud中配置以下环境变量：
+   - OPENAI_API_KEY: OpenRouter API密钥
+   - OPENAI_BASE_URL: https://openrouter.ai/api/v1
+   - OPENAI_MODEL: deepseek/deepseek-chat-v3.1:free
+   - SERPAPI_KEY: SerpAPI密钥（可选，用于网络搜索）
 
-5. 其他依赖：
-   - 确保你有有效的OpenAI API密钥
-   - 如果使用Google搜索功能，需要有效的SerpAPI密钥
-
-6. 运行应用：
+5. 运行应用：
    streamlit run app.py
 
 注意：
 - 请确保所有依赖都已正确安装
-- 在代码中替换OpenAI API密钥和SerpAPI密钥为你自己的密钥
+- API密钥通过环境变量管理，不要直接写在代码中
 - 对于大型文件处理，可能需要增加系统内存或使用更强大的硬件
 """
 
 import streamlit as st
 import sys
 import os
+from dotenv import load_dotenv
+
+# 加载环境变量
+load_dotenv()
 
 # 设置页面配置必须是第一个 Streamlit 命令
 st.set_page_config(
@@ -87,8 +82,8 @@ import streamlit.components.v1 as components
 
 # 修改初始化部分
 client = OpenAI(
-    api_key="sk-2D0EZSwcWUcD4c2K59353b7214854bBd8f35Ac131564EfBa",
-    base_url="https://free.gpt.ge/v1",
+    api_key=os.getenv("OPENAI_API_KEY"),
+    base_url=os.getenv("OPENAI_BASE_URL"),
     http_client=None,
     default_headers=None,
     default_query=None,
@@ -98,7 +93,7 @@ client = OpenAI(
 # 在初始化 client 后添加测试代码
 try:
     response = client.chat.completions.create(
-        model="gpt-3.5-turbo",  # 改回 gpt-3.5-turbo
+        model=os.getenv("OPENAI_MODEL", "deepseek/deepseek-chat-v3.1:free"),
         messages=[
             {"role": "system", "content": "请告诉我你的模型名称"},
             {"role": "user", "content": "你是什么模型？"}
@@ -216,7 +211,7 @@ def rag_qa(query, file_indices, relevant_docs=None):
         return "没有找到相关信息。", [], ""
 
     response = client.chat.completions.create(
-        model="gpt-4o-mini",
+        model=os.getenv("OPENAI_MODEL", "deepseek/deepseek-chat-v3.1:free"),
         messages=[
             {"role": "system", "content": "你是一位有帮助的助手。请根据给定的上下文回答问题。始终使用中文回答，无论问题是什么语言。在回答之后，请务必提供一段最相关的原文摘录，以'相关原文：'为前缀。"},
             {"role": "user", "content": f"上下文: {context_text}\n\n问题: {query}\n\n请提供你的回答然后在回答后面附上相关的原文摘录，以'相关原文：'为前缀。"}
@@ -536,7 +531,7 @@ def main():
             """
             
             response = client.chat.completions.create(
-                model="gpt-3.5-turbo",
+                model=os.getenv("OPENAI_MODEL", "deepseek/deepseek-chat-v3.1:free"),
                 messages=[
                     {"role": "system", "content": "你是一个SQL专家，能够将自然语言查询转换为SQL语句。请用中文回答。"},
                     {"role": "user", "content": prompt}
@@ -774,7 +769,7 @@ def main():
 
 def direct_qa(query):
     response = client.chat.completions.create(
-        model="gpt-3.5-turbo",
+        model=os.getenv("OPENAI_MODEL", "deepseek/deepseek-chat-v3.1:free"),
         messages=[
             {"role": "system", "content": "你是一个有帮助的助手，能够回答各种问题。请用中文回答。"},
             {"role": "user", "content": query}
@@ -788,7 +783,7 @@ def serpapi_search_qa(query, num_results=3):
     params = {
         "engine": "google",
         "q": query,
-        "api_key": "04fec5e75c6f477225ce29bc358f4cc7088945d0775e7f75721cd85b36387125",
+        "api_key": os.getenv("SERPAPI_KEY"),
         "num": num_results
     }
     
@@ -813,7 +808,7 @@ def serpapi_search_qa(query, num_results=3):
     请根据上述搜索结果回答问题。如果搜索结果不足以回答问题，请说"根据搜索结果无法回答问题"。"""
 
         response = client.chat.completions.create(
-            model="gpt-3.5-turbo",
+            model=os.getenv("OPENAI_MODEL", "deepseek/deepseek-chat-v3.1:free"),
             messages=[
                 {"role": "system", "content": "你是一个有帮助的助手，能够根据搜索结果回答问题。"},
                 {"role": "user", "content": prompt}
@@ -876,7 +871,7 @@ def nl_to_sql(nl_query):
     table_descriptions = "\n".join([f"表名: {table}\n字段: {', '.join(columns)}" for table, columns in table_info.items()])
     
     response = client.chat.completions.create(
-        model="gpt-3.5-turbo",
+        model=os.getenv("OPENAI_MODEL", "deepseek/deepseek-chat-v3.1:free"),
         messages=[
             {"role": "system", "content": f"你是一个SQL专家，够将自然语言查询转换为SQL语句。数据库包含以下表和字段：\n\n{table_descriptions}"},
             {"role": "user", "content": f"将以下自然语言查询转换为SQL语句：\n{nl_query}\n只返回SQL语句，不要有其他解释。"}
@@ -915,7 +910,7 @@ def generate_explanation(nl_query, sql_query, df):
     )
 
     response = client.chat.completions.create(
-        model="gpt-3.5-turbo",
+        model=os.getenv("OPENAI_MODEL", "deepseek/deepseek-chat-v3.1:free"),
         messages=[
             {"role": "system", "content": "你是一个数据分析专家，擅长解释SQL查询结果。"},
             {"role": "user", "content": prompt}
